@@ -43,7 +43,7 @@ class WatermarkProcessor:
             cls.tokenizer.pad_token = cls.tokenizer.pad_token or cls.tokenizer.eos_token
 
     def __init__(self, algorithm_name, model_id, config_dir="./generate/config"):
-        assert algorithm_name in ['KGW', 'Unigram', 'SWEET', 'EWD', 'SIR', 'XSIR', 'UPV', 'EXP', 'EXPEdit', 'SynthID']
+        assert algorithm_name in ['KGW', 'Unigram', 'SWEET', 'EWD', 'SIR', 'XSIR', 'UPV', 'EXP', 'EXPEdit', 'EXPGumbel', 'SynthID']
         self.algorithm_name = algorithm_name
 
         # Ensure model and tokenizer are initialized once
@@ -81,38 +81,34 @@ class WatermarkProcessor:
         for attempt in range(retries):
             print(f"[{self.algorithm_name}] Attempt {attempt + 1}/{retries} for prompt: {prompt[:30]}...")
             start_time = time.time()
-            try:
-                # Generate watermarked text
-                generated_text = self.watermark.generate_watermarked_text(prompt)
 
-                # Remove prompt from generated text if it exists
-                if generated_text.startswith(prompt):
-                    generated_text = generated_text[len(prompt):].strip()
+            # Generate watermarked text
+            generated_text = self.watermark.generate_watermarked_text(prompt)
 
-                detection_results = self.watermark.detect_watermark(generated_text)
-                is_watermarked = detection_results.get('is_watermarked', False)
-                score = detection_results.get('score', 0)
-                elapsed_time = time.time() - start_time
-                print(f"[{self.algorithm_name}] Generated text with 'is_watermarked': {is_watermarked}, score: {score:.2f} in {elapsed_time:.2f}s")
+            # Remove prompt from generated text if it exists
+            if generated_text.startswith(prompt):
+                generated_text = generated_text[len(prompt):].strip()
 
-                # Update best result
-                if score > best_result["score"]:
-                    best_result.update({
-                        "text": generated_text,
-                        "is_watermarked": is_watermarked,
-                        "score": score,
-                        "time": elapsed_time,
-                        "num_attempts": attempt + 1,
-                    })
+            detection_results = self.watermark.detect_watermark(generated_text)
+            is_watermarked = detection_results.get('is_watermarked', False)
+            score = detection_results.get('score', 0)
+            elapsed_time = time.time() - start_time
+            print(f"[{self.algorithm_name}] Generated text with 'is_watermarked': {is_watermarked}, score: {score:.2f} in {elapsed_time:.2f}s")
 
-                # If watermark is successfully detected, stop retrying
-                if is_watermarked:
-                    print(f"[{self.algorithm_name}] Watermark successfully detected. Stopping retries.")
-                    break
+            # Update best result
+            if score > best_result["score"]:
+                best_result.update({
+                    "text": generated_text,
+                    "is_watermarked": is_watermarked,
+                    "score": score,
+                    "time": elapsed_time,
+                    "num_attempts": attempt + 1,
+                })
 
-            except Exception as e:
-                print(f"[{self.algorithm_name}] Error during watermarking: {e}")
-                continue
+            # If watermark is successfully detected, stop retrying
+            if is_watermarked:
+                print(f"[{self.algorithm_name}] Watermark successfully detected. Stopping retries.")
+                break
 
         return best_result
 
@@ -194,18 +190,18 @@ if __name__ == "__main__":
     print("Starting watermark generation...")
 
     # Parameters
-    model_id = "meta-llama/Llama-3.3-70B-Instruct"
+    model_id = "meta-llama/Llama-3.1-70B-Instruct"
     data_path = "./data/prompts/entropy_control.csv"
 
     # Load data
-    df = pd.read_csv(data_path).head(2)
+    df = pd.read_csv(data_path) #.head(5)
 
     # List of watermarking algorithms
-    algorithms = ["KGW", "SynthID"]
+    algorithms = ["KGW", "EXP"] # "SynthID", "EXP", "EXPGumbel", 
 
     # Process and save results incrementally
-    n_responses_per_prompt = 1
-    for algorithm_name in algorithms:
+    n_responses_per_prompt = 3
+    for i, algorithm_name in enumerate(algorithms):
         print(f"\nProcessing algorithm: {algorithm_name}")
         output_csv = f"./data/texts/entropy_control_{algorithm_name}.csv"
         processor = WatermarkProcessor(algorithm_name, model_id)

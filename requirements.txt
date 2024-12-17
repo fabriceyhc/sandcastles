@@ -1,1 +1,7 @@
-markllm
+markllm # requires low version of openai, have to upgrade after the fact
+guidance
+socketio 
+openai
+hydra-core
+python-dotenv
+einops
