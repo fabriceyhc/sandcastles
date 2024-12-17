@@ -68,7 +68,7 @@ def main(cfg):
             if "Document" in m_str:
                 cfg.attack.max_steps = 100
 
-            cfg.attack.log_csv_path = f"./attack_traces/{o_str}_{d}_{m_str}_n-steps={cfg.attack.max_steps}_attack_results.csv"
+            cfg.attack.log_csv_path = f"./attack/traces/{o_str}_{d}_{m_str}_n-steps={cfg.attack.max_steps}_attack_results.csv"
 
             if os.path.exists(cfg.attack.log_csv_path):
                 log.info(f"skipping this attack configuration: {cfg.attack.log_csv_path}")
