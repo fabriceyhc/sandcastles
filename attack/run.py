@@ -22,17 +22,17 @@ def main(cfg):
     cfg.attack.check_watermark = False
 
     datasets = [
-        "GPT4o_unwatermarked",
-        "Adaptive",
+        # "GPT4o_unwatermarked",
+        # "Adaptive",
         # "EXP",
-        # "KGW",
+        "KGW",
     ]
 
     mutators = [
-        EntropyWordMutator, 
-        WordMutator,
-        SpanMutator,
-        SentenceMutator,
+        # EntropyWordMutator, 
+        # WordMutator,
+        # SpanMutator,
+        # SentenceMutator,
         Document1StepMutator,
         Document2StepMutator,
         DocumentMutator,

@@ -1,23 +1,27 @@
 import os
 import pandas as pd
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger(__name__)
+logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 
 # Directory containing attack trace files
-attack_trace_dir = "./distinguisher/attack_traces/"
+attack_trace_dir = "attack/traces/"
 
-# Helper function to extract variables from filenames
 def parse_filename(filename):
-    print(filename)
-    # Example filename: "{o_str}_{w_str}_{m_str}_compare-original={compare_against_original}_attack_results.csv"
+    log.info(f" Parsing {filename}...")
+    # Example filename: "{o_str}_{w_str}_{m_str}_n-steps={n_steps}_attack_results.csv"
     # Strip the directory and extension, then split by '_'
     base_name = os.path.basename(filename).replace('_attack_results.csv', '')
     parts = base_name.split('_')
-    
+
     o_str = parts[0]
     w_str = parts[1]
     m_str = parts[2]
-    compare_against_original = parts[3].split('=')[1]
-    
-    return o_str, w_str, m_str, compare_against_original
+    n_steps = parts[3].split('=')[1]  # Extract the value after 'n-steps='
+
+    return o_str, w_str, m_str, n_steps
 
 # Helper function to separate attacks based on step_num reset
 def separate_attacks(df):
@@ -60,7 +64,6 @@ def process_attack_traces(directory):
                     'o_str': o_str,
                     'w_str': w_str,
                     'm_str': m_str,
-                    'compare_against_original': compare_against_original,
                     'attack_num': i + 1,
                     'attack_data': attack
                 })

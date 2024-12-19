@@ -1,3 +1,5 @@
+# ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
+
 from guidance import models
 from distinguisher.models import (AggressiveSimple, SimpleGPT)
 from distinguisher.utils import all_attacks
@@ -5,6 +7,14 @@ import pandas as pd
 import os
 import datasets
 from dotenv import load_dotenv, find_dotenv
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger(__name__)
+logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
+
+# load_dotenv(find_dotenv())
+# chatgpt = models.OpenAI("gpt-4o-mini")
 
 class AttackParser():
     def __init__(self, file, df=None):
@@ -33,35 +43,28 @@ class AttackParser():
     
     def get_nth(self, n):
         return self.df[n]
-        
-    
-def get_file(entropy, output_num, attack_id):
-    csv_file_directory = f"results/stationary_distribution/robustness_analysis/entropy_{entropy}/"
-    first_perturbed_csv_filename = f"output_{output_num}/corpuses/attack_{attack_id}.csv"
-    csv_file_path = os.path.join(csv_file_directory, first_perturbed_csv_filename)
-    return csv_file_path
 
 
-# load_dotenv(find_dotenv())
-# chatgpt = models.OpenAI("gpt-4o-mini")
+def main():
 
-distinguisher_persona = \
-"""
-You are an expert in analyzing the similarity of responses.
-You specialize in detecting whether one response has been derived from another by carefully analyzing the content and structure of the text.
-Your expertise in linguistic analysis allows you to distinguish which responses are the most closely related.
-Your goal is to provide a clear, concise, and accurate assessment of the provided instructions.
-"""
+    distinguisher_persona = \
+    """
+    You are an expert in analyzing the similarity of responses.
+    You specialize in detecting whether one response has been derived from another by carefully analyzing the content and structure of the text.
+    Your expertise in linguistic analysis allows you to distinguish which responses are the most closely related.
+    Your goal is to provide a clear, concise, and accurate assessment of the provided instructions.
+    # """
 
-llm = models.LlamaCpp(
-    model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf",
-    echo=False,
-    n_gpu_layers=-1,
-    n_ctx=2048
-)
+    log.info(f"{all_attacks}")
 
-sd = AggressiveSimple(llm, distinguisher_persona, None, None)
-for i in range(8):
+    llm = models.LlamaCpp(
+        model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf",
+        echo=False,
+        n_gpu_layers=-1,
+        n_ctx=2048
+    )
+
+    sd = AggressiveSimple(llm, distinguisher_persona, None, None)
     for entropy in range(10):
         attack1 = all_attacks[i*30+entropy*3]
         attack2 = all_attacks[i*30+entropy*3+1]
@@ -91,4 +94,5 @@ for i in range(8):
         output_path='distinguisher/results/stationary_distribution_full.csv'
         dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path))
 
-# ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
+if __name__ == "__main__":
+    main()
