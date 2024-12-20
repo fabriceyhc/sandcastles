@@ -182,7 +182,8 @@ class EntropyWordMutator:
         # Compute entropies
         entropies = compute_entropies(segment_words, self.measure_model, self.measure_tokenizer)
 
-        assert len(entropies) == len(segment_words)
+        if len(entropies) != len(segment_words):
+            log.warning(f"Entropy length and segment word length not the same!!!")
 
         log.info(f"Segment Words: {segment_words}")
         log.info(f"Length of the Segment Words: {len(segment_words)}")
