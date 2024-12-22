@@ -47,9 +47,9 @@ def process_attack_traces(directory):
     all_attacks = []
     
     for filename in os.listdir(directory):
-        if filename.endswith('.csv'):
+        if filename.endswith('results.csv'):
             # Extract variables from the filename
-            o_str, w_str, m_str, compare_against_original = parse_filename(filename)
+            o_str, w_str, m_str, n_steps = parse_filename(filename)
             
             # Load the CSV into a pandas DataFrame
             file_path = os.path.join(directory, filename)

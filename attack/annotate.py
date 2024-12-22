@@ -1,5 +1,17 @@
+# RUN: CUDA_VISIBLE_DEVICES=3,4 python -m attack.annotate
+
 import pandas as pd
 import re
+import os
+import logging
+import glob
+import traceback
+from extractors import FluencyMetric, GrammarMetric, EditsMetric, InternLMQualityMetric
+from watermark.get_watermark import get_watermark
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 
 def assign_unique_group_ids(df):
     df['new_group'] = (df['step_num'] == 0).astype(int)
@@ -12,33 +24,28 @@ def get_support(df):
 def get_max_step_count(df):
     return df['step_num'].max()
 
-if __name__ == "__main__":
-
-    # RUN: CUDA_VISIBLE_DEVICES=3,4 python -m attack.annotate_traces
-
-    import os
-    import glob
-    import traceback
-    from extractors import FluencyMetric, GrammarMetric, QualityMetric, EditsMetric, InternLMQualityMetric
-        
+def main():
     # Initialize metric extractors
     fluency = FluencyMetric()
     grammar = GrammarMetric()
     quality = InternLMQualityMetric()
     edits   = EditsMetric()
 
-    #                                   o  w  m  s
-    # traces = glob.glob("./attack_traces/DiffOracle_adaptive_EntropyWordMutator?*_attack_results*.csv")
-    traces = glob.glob("./attack_traces/DiffOracle_UMDnew_WordMutator*_attack_results*.csv")
-    # traces = glob.glob("./attack_traces/DiffOracle_UMDnew?*_?*_attack_results*.csv")
-    print(traces)
+    traces = glob.glob(f"./attack/traces/*.csv")
 
     for trace in traces:
-        print(trace)
+        log.info(f"Trace: {trace}")
 
-        # want to be able to create results_annotated.csv file from results.csv
-        # if results_annotated already exists, just work on that
+        o, w, m, s = os.path.basename(trace).split("_")[:4]
+        s = int(s.replace("n-steps=", ""))
+
+        log.info(f"Oracle: {o}")
+        log.info(f"Watermarker: {w}")
+        log.info(f"Mutator: {m}")
+        log.info(f"Steps: {s}")
+
         output_file = trace
+
         if "annotated" not in output_file:
             suffix = re.search(r"results(.*)\.csv", output_file).group(1)
             output_file = output_file.replace(f"results{suffix}.csv", f"results_annotated{suffix}.csv")
@@ -46,10 +53,12 @@ if __name__ == "__main__":
             if output_file in traces:
                 print(f"\tWould-be output file {output_file} already exists")
                 continue
-        o, w, m, s = os.path.basename(trace).split("_")[:4]
-        s = int(s.replace("n-steps=", ""))
+
+        log.info(f"Output File: {output_file}")
         
         df = assign_unique_group_ids(pd.read_csv(trace))
+
+        # Ensure that there's no NaN values in the mutated and current text columns
         df["mutated_text"] = df["mutated_text"].fillna(df["current_text"])
         df['current_text'] = df['mutated_text'].shift(1)
         df["current_text"] = df["current_text"].fillna(df["mutated_text"])
@@ -78,11 +87,26 @@ if __name__ == "__main__":
                 df = quality.evaluate_dataframe(df, prompt_column="prompt", text_column="mutated_text", new_column="internlm_quality")
             except:
                 print(f"{'=' * 50} internlm_quality {'=' * 50}")
-                print(traceback.format_exc())   
-        
-        
-        
+                print(traceback.format_exc()) 
 
-        print(df)
-        print(output_file)
+        mask = df['watermark_score'].isna()
+        if mask.any():
+            watermark = get_watermark(w)
+
+            def detect_watermark(row):
+                if pd.isna(row['watermark_score']):
+                    is_detected, score = watermark.detect(row['mutated_text'])
+                    row['watermark_detected'] = is_detected
+                    row['watermark_score'] = score
+                return row
+
+            df = df.apply(detect_watermark, axis=1)
+        
+        log.info(df)
+        log.info(output_file)
         df.to_csv(output_file, index=False)
+
+        break
+
+if __name__ == "__main__":
+    main()

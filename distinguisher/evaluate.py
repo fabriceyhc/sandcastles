@@ -66,7 +66,7 @@ def main():
 
     sd = AggressiveSimple(llm, distinguisher_persona, None, None)
     for entropy in range(10):
-        attack1 = all_attacks[i*30+entropy*3]
+        attack1 = [i*30+entropy*3]
         attack2 = all_attacks[i*30+entropy*3+1]
         origin_A = AttackParser(None, attack1["attack_data"])
         origin_B = AttackParser(None, attack2["attack_data"])
