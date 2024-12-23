@@ -8,42 +8,55 @@ def split_csv_by_approx_size(
 ):
     """
     Splits the CSV into multiple chunks, each trying not to exceed `max_bytes`.
-    Reads the CSV in smaller chunks (small_chunk_rows) and accumulates until near max_bytes.
-    
-    Returns a list of chunk file paths created.
+    - Reads the CSV in smaller chunks (small_chunk_rows) and accumulates them
+      until adding another chunk would exceed the max_bytes threshold.
+    - If the file is already smaller than max_bytes, skip splitting.
+
+    Returns a list of chunk file paths created (or a single path if no split).
     """
+
+    # 1. Check if the file is already below the threshold
+    file_size = os.path.getsize(input_csv_path)
+    if file_size < max_bytes:
+        # Skip splitting, return the original file path
+        return [input_csv_path]
+
+    # 2. Proceed with splitting
     base_dir = os.path.dirname(input_csv_path)
     filename = os.path.basename(input_csv_path)
     file_root, file_ext = os.path.splitext(filename)
     
     output_paths = []
     part_idx = 1
-    collector = []  # will hold small DataFrame chunks
+
+    # This collector accumulates dataframes until we exceed max_bytes
+    collector = []
     current_size = 0
 
+    # Read the file in smaller chunks via chunksize
     reader = pd.read_csv(input_csv_path, chunksize=small_chunk_rows)
-
+    
     for df_small in reader:
-        # Convert to CSV in memory (string), measure size
+        # Convert the small chunk to CSV in memory (string) to estimate its size
         csv_str = df_small.to_csv(index=False, header=False)  
         chunk_size = len(csv_str.encode('utf-8'))  
 
-        if current_size + chunk_size > max_bytes:
-            # Write out the existing collector as one chunk
+        # If adding this small chunk would exceed the limit, flush what we have
+        if current_size + chunk_size > max_bytes and collector:
             chunk_path = os.path.join(base_dir, f"{file_root}_part{part_idx}{file_ext}")
             _write_collector_as_csv(collector, chunk_path)
             output_paths.append(chunk_path)
-            part_idx += 1
 
-            # Reset collector
+            part_idx += 1
+            # Reset our collector and size
             collector = []
             current_size = 0
 
-        # Add new small chunk
+        # Add the new small chunk
         collector.append(df_small)
         current_size += chunk_size
 
-    # If there's anything left in collector after the loop, flush it
+    # 3. After the loop, if anything remains in the collector, write it out
     if collector:
         chunk_path = os.path.join(base_dir, f"{file_root}_part{part_idx}{file_ext}")
         _write_collector_as_csv(collector, chunk_path)
@@ -54,11 +67,12 @@ def split_csv_by_approx_size(
 
 def _write_collector_as_csv(collector, output_path):
     """
-    Helper function to write a list of DataFrames to CSV (with header in the first chunk).
+    Helper function to write a list of DataFrames to a single CSV,
+    including a header on the output.
     """
-    # Concatenate everything
+    # Concatenate the dataframes
     df = pd.concat(collector, ignore_index=True)
-    # Write with header (we assume same columns throughout)
+    # Write them as CSV with header
     df.to_csv(output_path, index=False, header=True)
 
 
