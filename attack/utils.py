@@ -148,97 +148,6 @@ def get_last_step_num(csv_file_path):
     last_step_num = df['step_num'].iloc[-1]
     
     return last_step_num
-    
-def get_prompt_and_completion_from_json(file_path, index):
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-
-    # Initialize lists to store prefixes and completions
-    prefixes = []
-    completions = []
-
-    # Iterate through each element in the list
-    for item in data:
-        prefixes.append(item['Prefix'])
-        completions.append(item['Completion'])
-        
-    prompt = prefixes[index]
-    watermarked_text = completions[index] 
-    
-    return prompt, watermarked_text
-
-# def query_openai(prompt, model = "gpt-4-turbo-2024-04-09", max_tokens = None):
-#     client = OpenAI()
-
-#     completion = client.chat.completions.create(
-#     model=model,
-#     max_tokens=max_tokens,
-#     messages=[
-#         {"role": "system", "content": "You are a helpful assistant."},
-#         {"role": "user", "content": prompt}
-#     ]
-#     )
-    
-#     response = completion.choices[0].message
-    
-#     return response.content
-
-# def get_completion_from_openai(prefix, max_tokens = None):
-#     completion = query_openai(prefix, max_tokens=max_tokens)
-#     completion = prefix + " " + completion
-#     return completion
-
-def query_openai_with_history(initial_prompt, follow_up_prompt, model = "gpt-4o"):
-    client = OpenAI()
-
-    completion = client.chat.completions.create(
-    model=model,
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": initial_prompt}
-    ]
-    )
-
-    first_response = completion.choices[0].message
-    
-    completion = client.chat.completions.create(
-    model=model,
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": initial_prompt},
-        {'role': "assistant", "content": first_response.content},
-        {"role": "user", "content": follow_up_prompt},
-    ]
-    )
-
-    second_response = completion.choices[0].message
-    
-    return first_response, second_response
-
-def get_perturbation_stats(step_num, current_text, mutated_text, quality_preserved, quality_analysis, watermark_detected, watermark_score, backtrack):
-    perturbation_stats = [{
-        "step_num": step_num,
-        "current_text": current_text,
-        "mutated_text": mutated_text, 
-        "current_text_len": count_words(current_text),
-        "mutated_text_len": count_words(mutated_text), 
-        "quality_preserved": quality_preserved,
-        "quality_analysis" : quality_analysis,
-        "watermark_detected": watermark_detected,
-        "watermark_score": watermark_score,
-        "backtrack" : backtrack,
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }]
-    
-    return perturbation_stats
-
-def mixtral_format_instructions(prompt):
-    return textwrap.dedent(f"""
-    [INST]
-    {prompt}
-    [/INST]
-
-    Answer:""")
 
 def strip_up_to(response, delimiter):
     # Find the position of the delimiter
@@ -253,13 +162,6 @@ def strip_up_to(response, delimiter):
 def replace_multiple_commas(s):
     # Replace multiple commas with a single comma
     return re.sub(r',+', ',', s)
-
-def parse_llama_output(response):
-    delimiter = "<|end_header_id|>"
-    response = strip_up_to(response, delimiter)
-    response = response[:-9] if response.endswith('assistant') else response
-    response = replace_multiple_commas(response)
-    return response
     
 def diff(text1, text2):
     """
@@ -279,6 +181,7 @@ def diff(text1, text2):
     diff_result = '\n'.join(diff)
 
     return diff_result
+
 def read_text_file(file_path):
     """
     Reads a text file and returns its contents as a string.
@@ -397,3 +300,39 @@ def strip_punct(word):
     stripped_word = word[i:j+1]
 
     return (left_punctuation, stripped_word, right_punctuation)
+
+def load_all_csvs_for_mutator(base_dir, mutator_str):
+    """
+    Searches anywhere in the filename for the given `mutator_str`
+    (e.g. "WordMutator", "SentenceMutator", etc.) and loads all
+    such CSV files into one DataFrame.
+
+    For instance, if mutator_str = "WordMutator", this will match:
+        InternLMOracle_GPT4o_unwatermarked_WordMutator_n-steps=1000_attack_results_part6.csv
+    and any other CSV that includes the substring "WordMutator".
+
+    Returns a Pandas DataFrame concatenating all matches.
+    If no files match, returns an empty DataFrame.
+    """
+
+    # Build a glob pattern that matches anything containing the mutator_str,
+    # followed by anything, and ending with .csv
+    pattern = os.path.join(base_dir, f"*{mutator_str}*.csv")
+
+    # Get all matching CSV files
+    csv_files = glob.glob(pattern)
+
+    # Sort them so part1 < part2 < part3, etc. (if you have chunked files)
+    csv_files.sort()
+
+    # Read each CSV into a list of DataFrames
+    dataframes = []
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+        dataframes.append(df)
+
+    # Concatenate into one DataFrame
+    if dataframes:
+        return pd.concat(dataframes, ignore_index=True)
+    else:
+        return pd.DataFrame()
