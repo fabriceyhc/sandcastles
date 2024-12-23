@@ -109,4 +109,7 @@ def main():
         break
 
 if __name__ == "__main__":
+
+    # python -m attack.scripts.annotate
+
     main()
