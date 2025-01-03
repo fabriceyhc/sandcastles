@@ -220,6 +220,6 @@ if __name__ == "__main__":
             for algorithm_name in algorithms:
                 processor = WatermarkProcessor(algorithm_name, model_id)
                 detection_results = processor.watermark.detect_watermark(unwatermarked_result["text"])
-                all_scores.update({f"{algorithm_name}_score": detection_results.pop('scores', {})})
+                all_scores.update({f"{algorithm_name}_score": detection_results.pop('score', {})})
             combined_result = {**row.to_dict(), **unwatermarked_result, **all_scores}
             save_to_csv([combined_result], unwatermarked_output_csv)
