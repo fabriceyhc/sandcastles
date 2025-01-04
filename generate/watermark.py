@@ -184,7 +184,7 @@ class WatermarkProcessor:
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 python -m generate.watermark
+    # CUDA_VISIBLE_DEVICES=0,1,2,4,5,6,7 python -m generate.watermark
 
     # Processing log
     print("Starting watermark generation...")
@@ -199,23 +199,27 @@ if __name__ == "__main__":
     # List of watermarking algorithms
     algorithms = ["KGW", "EXP"] # "SynthID", "EXP", "EXPGumbel", 
 
-    # Process and save results incrementally
-    n_responses_per_prompt = 3
-    for i, algorithm_name in enumerate(algorithms):
-        print(f"\nProcessing algorithm: {algorithm_name}")
-        output_csv = f"./data/texts/entropy_control_{algorithm_name}.csv"
-        processor = WatermarkProcessor(algorithm_name, model_id)
-        processor.watermark_dataset(df, output_csv, n_responses=n_responses_per_prompt, retries=3)
+    # # Process and save results incrementally
+    # n_responses_per_prompt = 3
+    # for i, algorithm_name in enumerate(algorithms):
+    #     print(f"\nProcessing algorithm: {algorithm_name}")
+    #     output_csv = f"./data/texts/entropy_control_{algorithm_name}.csv"
+    #     processor = WatermarkProcessor(algorithm_name, model_id)
+    #     processor.watermark_dataset(df, output_csv, n_responses=n_responses_per_prompt, retries=3)
 
     # Generate unwatermarked samples
     print("\nGenerating unwatermarked samples...")
-    unwatermarked_output_csv = "./data/texts/entropy_control_unwatermarked.csv"
+    unwatermarked_output_csv = "./data/texts/entropy_control_Llama3.1-70B_unwatermarked.csv"
     all_scores = {}
-    for algorithm_name in algorithms:
-        processor = WatermarkProcessor(algorithm_name, model_id)
+    for _ in range(n_responses_per_prompt):
+        # Doesn't matter which algo we use for generating without watermark
+        processor = WatermarkProcessor("KGW", model_id)
         for _, row in df.iterrows():
             prompt = row['prompt']
             unwatermarked_result = processor.unwatermarked_prompt(prompt, retries=3)
-            all_scores.update(unwatermarked_result.pop('scores', {}))
-            combined_result = {**row.to_dict(), **unwatermarked_result}
+            for algorithm_name in algorithms:
+                processor = WatermarkProcessor(algorithm_name, model_id)
+                detection_results = processor.watermark.detect_watermark(unwatermarked_result["text"])
+                all_scores.update({f"{algorithm_name}_score": detection_results.pop('score', {})})
+            combined_result = {**row.to_dict(), **unwatermarked_result, **all_scores}
             save_to_csv([combined_result], unwatermarked_output_csv)
