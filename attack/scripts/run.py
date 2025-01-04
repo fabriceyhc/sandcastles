@@ -23,8 +23,8 @@ def main(cfg):
 
     datasets = [
         # "GPT4o_unwatermarked",
-        "GPT4o_small",
-        # "unwatermarked",
+        # "GPT4o_small",
+        "unwatermarked",
         # "Adaptive",
         # "EXP",
         # "KGW",
@@ -32,8 +32,8 @@ def main(cfg):
 
     mutators = [
         # EntropyWordMutator, 
-        # WordMutator,
-        # SpanMutator,
+        WordMutator,
+        SpanMutator,
         SentenceMutator,
         # Document1StepMutator,
         # Document2StepMutator,
@@ -46,7 +46,7 @@ def main(cfg):
     for d in datasets:
 
         # Load data
-        data = pd.read_csv(f"./data/texts/entropy_control_{d}.csv")
+        data = pd.read_csv(f"./data/texts/entropy_control_{d}.csv", encoding= 'unicode_escape')
 
         for mutator in mutators:
             # Initialize Mutator
@@ -66,7 +66,7 @@ def main(cfg):
             if m_str == "SpanMutator":
                 cfg.attack.max_steps = 250
             if "Sentence" in m_str:
-                cfg.attack.max_steps = 500
+                cfg.attack.max_steps = 150
             if "Document" in m_str:
                 cfg.attack.max_steps = 100
 
