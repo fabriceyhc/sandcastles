@@ -8,7 +8,7 @@ import matplotlib.cm as cm
 from collections import defaultdict
 
 mutators = ["Document1StepMutator", "Document2StepMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
-watermarks = ["GPT4o_unwatermarked", "Llama-3.1_unwatermarked", "Adaptive", "UMD"]
+watermarks = ["GPT4o_unwatermarked", "GPT4o_small", "Llama-3.1_unwatermarked", "Adaptive", "KGW"]
 
 
 # How to split across mutator, watermark scheme, and entropy:
