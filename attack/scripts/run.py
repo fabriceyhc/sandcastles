@@ -16,34 +16,28 @@ logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 
-@hydra.main(version_base=None, config_path="./config", config_name="attack")
+@hydra.main(version_base=None, config_path="../config", config_name="attack")
 def main(cfg):
 
     cfg.attack.check_watermark = False
 
     datasets = [
-<<<<<<< HEAD:attack/scripts/run.py
-        "GPT4o_unwatermarked",
-=======
         # "GPT4o_unwatermarked",
->>>>>>> 63b8aaf3b937eb76d557f744e275dcb09e415cf9:attack/run.py
+        # "GPT4o_small",
+        "unwatermarked",
         # "Adaptive",
         # "EXP",
-        "KGW",
+        # "KGW",
     ]
 
     mutators = [
         # EntropyWordMutator, 
-        # WordMutator,
-        # SpanMutator,
-<<<<<<< HEAD:attack/scripts/run.py
+        WordMutator,
+        SpanMutator,
         SentenceMutator,
-=======
-        # SentenceMutator,
->>>>>>> 63b8aaf3b937eb76d557f744e275dcb09e415cf9:attack/run.py
-        Document1StepMutator,
-        Document2StepMutator,
-        DocumentMutator,
+        # Document1StepMutator,
+        # Document2StepMutator,
+        # DocumentMutator,
     ]
 
     # Initialize Quality Oracle
@@ -52,7 +46,7 @@ def main(cfg):
     for d in datasets:
 
         # Load data
-        data = pd.read_csv(f"./data/texts/entropy_control_{d}.csv")
+        data = pd.read_csv(f"./data/texts/entropy_control_{d}.csv", encoding= 'unicode_escape')
 
         for mutator in mutators:
             # Initialize Mutator

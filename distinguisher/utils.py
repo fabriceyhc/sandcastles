@@ -10,16 +10,28 @@ logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 attack_trace_dir = "attack/traces/"
 
 def parse_filename(filename):
-    log.info(f" Parsing {filename}...")
+    
     # Example filename: "{o_str}_{w_str}_{m_str}_n-steps={n_steps}_attack_results.csv"
-    # Strip the directory and extension, then split by '_'
-    base_name = os.path.basename(filename).replace('_attack_results.csv', '')
+    # Strip the directory and extension, handle `_attack_results_part` and then split by '_'
+    base_name = os.path.basename(filename)
+    base_name = base_name.replace('_attack_results.csv', '')
+    
+    # Handle cases with `_attack_results_part` optionally followed by a string
+    if '_attack_results_part' in base_name:
+        base_name = base_name.split('_attack_results_part')[0]
+    
     parts = base_name.split('_')
 
     o_str = parts[0]
-    w_str = parts[1]
-    m_str = parts[2]
-    n_steps = parts[3].split('=')[1]  # Extract the value after 'n-steps='
+
+    if 'GPT' in parts[1]:
+        w_str = f"{parts[1]}_{parts[2]}"
+        m_str = parts[3]
+        n_steps = parts[4].split('=')[1]  # Extract the value after 'n-steps='
+    else:
+        w_str = parts[1]
+        m_str = parts[2]
+        n_steps = parts[3].split('=')[1]  # Extract the value after 'n-steps='
 
     return o_str, w_str, m_str, n_steps
 
@@ -42,31 +54,44 @@ def separate_attacks(df):
     
     return attacks
 
-# Parse the directory and process each attack trace file
 def process_attack_traces(directory):
     all_attacks = []
+    file_groups = {}
     
     for filename in os.listdir(directory):
-        if filename.endswith('results.csv'):
-            # Extract variables from the filename
-            o_str, w_str, m_str, n_steps = parse_filename(filename)
-            
-            # Load the CSV into a pandas DataFrame
+        if "annotated" in filename:
+            continue
+        if 'results' in filename:
+            base_name = '_'.join(filename.split('_part')[0].split('_')[:-1])
+            # log.info(f"Base Name: {base_name}")
+            if base_name not in file_groups:
+                file_groups[base_name] = []
+            file_groups[base_name].append(filename)
+
+    for base_name, files in file_groups.items():
+        combined_df = pd.DataFrame()
+
+        for filename in sorted(files):  # Ensure files are processed in order of parts
             file_path = os.path.join(directory, filename)
             df = pd.read_csv(file_path)
-            
-            # Separate attacks based on step_num
-            attacks = separate_attacks(df)
-            
-            # Store each attack with its metadata
-            for i, attack in enumerate(attacks):
-                all_attacks.append({
-                    'o_str': o_str,
-                    'w_str': w_str,
-                    'm_str': m_str,
-                    'attack_num': i + 1,
-                    'attack_data': attack
-                })
+            combined_df = pd.concat([combined_df, df], ignore_index=True)
+
+        # Extract variables from the first filename
+        o_str, w_str, m_str, n_steps = parse_filename(files[0])
+        
+        # Separate attacks based on the combined DataFrame
+        attacks = separate_attacks(combined_df)
+        
+        # Store each attack with its metadata
+        for i, attack in enumerate(attacks):
+            all_attacks.append({
+                'o_str': o_str,
+                'w_str': w_str,
+                'm_str': m_str,
+                'n_steps': n_steps,
+                'attack_num': i + 1,
+                'attack_data': attack
+            })
     
     return all_attacks
 

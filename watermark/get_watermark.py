@@ -29,8 +29,18 @@ def get_watermark(watermark):
     
     # Load watermark algorithm
     myWatermark = AutoWatermark.load(watermark, 
-                                    algorithm_config=f'../watermark/config/{watermark}.json',
+                                    algorithm_config=f'./watermark/config/{watermark}.json',
                                     transformers_config=transformers_config)
 
-    return myWatermark
+    return myWatermark, model, tokenizer
     
+def cleanup_resources(model, tokenizer):
+    import gc
+    import torch
+    
+    del model
+    del tokenizer
+    gc.collect()
+    for device_id in range(torch.cuda.device_count()):
+        with torch.cuda.device(device_id):
+            torch.cuda.empty_cache()
