@@ -3,7 +3,7 @@ import os
 
 def split_csv_by_approx_size(
     input_csv_path, 
-    max_bytes=100 * 1024 * 1024,  # 100 MB
+    max_bytes=90 * 1024 * 1024,  # 90 MB
     small_chunk_rows=1000
 ):
     """
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     traces = glob.glob("./attack/traces/*")
 
-    traces = [trace for trace in traces if "GPT4o" in trace and "SentenceMutator" in trace and "part" not in trace and "500" in trace]
+    traces = [trace for trace in traces if "Adaptive" in trace and "WordMutator" in trace]
     
     for trace in traces:
         chunk_paths = split_csv_by_approx_size(trace)

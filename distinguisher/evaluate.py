@@ -120,7 +120,12 @@ def distinguish_attacks(sd, df, length_of_df):
     prompt_type = extract_unique_column_value(df, "prompt_type")
     ids = get_id_tuples(length_of_df)
 
-    output_path=f"distinguisher/results/{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
+    output_path=f"distinguisher/results/long_{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
+
+    log.info(f"Oracle: {o_str}")
+    log.info(f"Mutator: {m_str}")
+    log.info(f"Watermarker: {w_str}")
+    log.info(f"Prompt Type: {prompt_type}")
 
     if os.path.isfile(output_path):
         log.info(f"Path {output_path} already exists, returning...")
@@ -152,7 +157,6 @@ def distinguish_attacks(sd, df, length_of_df):
         dataset["entropy"] = entropy
         dataset["attack1_id"] = attack1_id
         dataset["attack2_id"] = attack2_id
-        output_path=f"distinguisher/results/{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
         dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
 
 def main():
@@ -176,16 +180,20 @@ def main():
 
     # TODO: Adjust this to pick which attacks to distinguish.
     # df = df[df['w_str'].isin(['GPT4o_small'])] # GPT4o_unwatermarked, KGW, Adaptive,
-    df = df[df['w_str'].isin(['GPT4o_unwatermarked, KGW, Adaptive'])]
-    df = df[df['m_str'].isin(["WordMutator", "SpanMutator", "SentenceMutator"])]
+    # df = df[df['w_str'].isin(['GPT4o_unwatermarked', 'KGW', 'Adaptive'])]
+    # df = df[df['m_str'].isin(["WordMutator", "SpanMutator", "SentenceMutator"])]
     # df = df[df['m_str'].isin(["SentenceMutator"])] # Document1StepMutator, Document2StepMutator, DocumentMutator
+    df = df[df['n_steps'] == '500']
+
     length_of_df = 30
     # sd = AggressiveSimple(llm, distinguisher_persona, None, None)
-    sd = ReasoningDistinguisher(llm, distinguisher_persona, None, None)
-    # sd = SimpleDistinguisher(llm, distinguisher_persona, None, None)
+    # sd = ReasoningDistinguisher(llm, distinguisher_persona, None, None)
+    sd = SimpleDistinguisher(llm, distinguisher_persona, None, None)
 
     unique_values = df['m_str'].unique()
     dfs_by_m_str = {value: df[df['m_str'] == value].copy() for value in unique_values}
+
+    # log.info(f"DFs by m_str: {dfs_by_m_str}")
 
     further_split_dfs = {}
     for key, dataframe in dfs_by_m_str.items():
@@ -201,6 +209,8 @@ def main():
             f'{key}_part2': split_dfs[1],
             f'{key}_part3': split_dfs[2]
         }
+
+    # log.info(f"Further split: {further_split_dfs}")
 
     # Verify each further split has length_of_df rows and order is preserved
     for _, splits in further_split_dfs.items():
