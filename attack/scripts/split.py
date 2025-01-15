@@ -3,7 +3,7 @@ import os
 
 def split_csv_by_approx_size(
     input_csv_path, 
-    max_bytes=90 * 1024 * 1024,  # 90 MB
+    max_bytes=50 * 1024 * 1024,  # 50 MB
     small_chunk_rows=1000
 ):
     """
