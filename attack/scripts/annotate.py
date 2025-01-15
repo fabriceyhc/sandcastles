@@ -33,10 +33,6 @@ def main():
     quality = InternLMQualityMetric()
     edits   = EditsMetric()
 
-    # TODO: Remove.
-    # w = "KGW"
-    # watermark, model, tokenizer = get_watermark(w)
-
     traces = glob.glob(f"./attack/traces/*.csv")
 
     for trace in traces:
@@ -49,19 +45,6 @@ def main():
         log.info(f"Watermarker: {w}")
         log.info(f"Mutator: {m}")
         log.info(f"Steps: {s}")
-
-        # if w not in ["KGW"]:
-        # # if w not in ['GPT4o_unwatermarked', "KGW", "Adaptive"]:
-        #     continue
-
-        # if m not in ["WordMutator", "SpanMutator", "SentenceMutator"]:
-        #     continue
-
-        # if "Document" not in m:
-        #     continue
-
-        # if s != 500:
-        #     continue  
 
 
         if "InternLMOracle_KGW_Document1StepMutator_n-steps=100_attack_results_annotated.csv" in trace:
@@ -113,19 +96,6 @@ def main():
             except:
                 print(f"{'=' * 50} internlm_quality {'=' * 50}")
                 print(traceback.format_exc()) 
-
-        # mask = df['watermark_score'].isna()
-        # if mask.any():
-        #     def detect_watermark(row):
-        #         if pd.isna(row['watermark_score']):
-        #             is_detected, score = watermark.detect_watermark(row['mutated_text'])
-        #             log.info(f"Is Detected: {is_detected}")
-        #             log.info(f"Score: {score}")
-        #             row['watermark_detected'] = is_detected
-        #             row['watermark_score'] = score
-        #         return row
-
-        #     df = df.apply(detect_watermark, axis=1)
         
         log.info(df)
         log.info(output_file)
