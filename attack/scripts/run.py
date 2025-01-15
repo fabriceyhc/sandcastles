@@ -23,20 +23,19 @@ def main(cfg):
 
     datasets = [
         # "GPT4o_unwatermarked",
-        # "GPT4o_small",
-        "unwatermarked",
-        # "Adaptive",
+        # "unwatermarked",
+        "Adaptive",
         # "EXP",
         # "KGW",
     ]
 
     mutators = [
         # EntropyWordMutator, 
-        WordMutator,
-        SpanMutator,
-        SentenceMutator,
+        # WordMutator,
+        # SpanMutator,
+        # SentenceMutator,
         # Document1StepMutator,
-        # Document2StepMutator,
+        Document2StepMutator,
         # DocumentMutator,
     ]
 

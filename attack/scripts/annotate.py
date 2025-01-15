@@ -1,17 +1,19 @@
-# RUN: CUDA_VISIBLE_DEVICES=3,4 python -m attack.annotate
+# RUN: CUDA_VISIBLE_DEVICES=4,5 python -m attack.scripts.annotate
 
 import pandas as pd
 import re
 import os
+import torch
 import logging
 import glob
 import traceback
 from extractors import FluencyMetric, GrammarMetric, EditsMetric, InternLMQualityMetric
-from watermark.get_watermark import get_watermark
+from watermark.get_watermark import get_watermark, cleanup_resources
+from distinguisher.utils import parse_filename
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
+# logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 
 def assign_unique_group_ids(df):
     df['new_group'] = (df['step_num'] == 0).astype(int)
@@ -31,12 +33,16 @@ def main():
     quality = InternLMQualityMetric()
     edits   = EditsMetric()
 
+    # TODO: Remove.
+    # w = "KGW"
+    # watermark, model, tokenizer = get_watermark(w)
+
     traces = glob.glob(f"./attack/traces/*.csv")
 
     for trace in traces:
         log.info(f"Trace: {trace}")
 
-        o, w, m, s = os.path.basename(trace).split("_")[:4]
+        o, w, m, s = parse_filename(trace)
         s = int(s.replace("n-steps=", ""))
 
         log.info(f"Oracle: {o}")
@@ -44,6 +50,25 @@ def main():
         log.info(f"Mutator: {m}")
         log.info(f"Steps: {s}")
 
+        # if w not in ["KGW"]:
+        # # if w not in ['GPT4o_unwatermarked', "KGW", "Adaptive"]:
+        #     continue
+
+        # if m not in ["WordMutator", "SpanMutator", "SentenceMutator"]:
+        #     continue
+
+        # if "Document" not in m:
+        #     continue
+
+        # if s != 500:
+        #     continue  
+
+
+        if "InternLMOracle_KGW_Document1StepMutator_n-steps=100_attack_results_annotated.csv" in trace:
+            print("Nice.")
+        else:
+            continue
+ 
         output_file = trace
 
         if "annotated" not in output_file:
@@ -89,24 +114,22 @@ def main():
                 print(f"{'=' * 50} internlm_quality {'=' * 50}")
                 print(traceback.format_exc()) 
 
-        mask = df['watermark_score'].isna()
-        if mask.any():
-            watermark = get_watermark(w)
+        # mask = df['watermark_score'].isna()
+        # if mask.any():
+        #     def detect_watermark(row):
+        #         if pd.isna(row['watermark_score']):
+        #             is_detected, score = watermark.detect_watermark(row['mutated_text'])
+        #             log.info(f"Is Detected: {is_detected}")
+        #             log.info(f"Score: {score}")
+        #             row['watermark_detected'] = is_detected
+        #             row['watermark_score'] = score
+        #         return row
 
-            def detect_watermark(row):
-                if pd.isna(row['watermark_score']):
-                    is_detected, score = watermark.detect(row['mutated_text'])
-                    row['watermark_detected'] = is_detected
-                    row['watermark_score'] = score
-                return row
-
-            df = df.apply(detect_watermark, axis=1)
+        #     df = df.apply(detect_watermark, axis=1)
         
         log.info(df)
         log.info(output_file)
         df.to_csv(output_file, index=False)
-
-        break
 
 if __name__ == "__main__":
 

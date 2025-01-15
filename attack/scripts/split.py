@@ -87,6 +87,8 @@ if __name__ == "__main__":
     import glob
 
     traces = glob.glob("./attack/traces/*")
+
+    traces = [trace for trace in traces if "GPT4o" in trace and "SentenceMutator" in trace and "part" not in trace and "500" in trace]
     
     for trace in traces:
         chunk_paths = split_csv_by_approx_size(trace)
