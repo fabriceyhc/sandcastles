@@ -8,7 +8,16 @@ import matplotlib.cm as cm
 from collections import defaultdict
 
 mutators = ["Document1StepMutator", "Document2StepMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
-watermarks = ["GPT4o_unwatermarked", "GPT4o_small", "Llama-3.1_unwatermarked", "Adaptive", "KGW"]
+watermarks = ["GPT4o_unwatermarked", "Adaptive", "KGW", "EXP"]
+watermark_thresholds = {
+    "GPT4o_unwatermarked", 
+    "Llama-3.1_unwatermarked", 
+    "Adaptive", 
+    "KGW", 
+    "EXP"
+}
+annotated_watermarks = ["KGW", "Adaptive"]
+quality_watermarks = ["KGW", "GPT4o_unwatermarked"]
 
 
 # How to split across mutator, watermark scheme, and entropy:
@@ -76,22 +85,148 @@ def plot_sliding_window_success_rates():
             cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
             cbar.set_label('Entropy Level')
         
-        plt.savefig(f"./attack/analysis/rolling_success_{watermarker}.png")
+        plt.savefig(f"./attack/analysis/figs/rolling_success_{watermarker}.png")
 
 
-    
 
-def plot_oracle_failure_rates_on_human_data():
-    # this data already exists somewhere
-    pass
 
 def plot_quality_degredation_vs_zscore():
-    # split across watermark, mutator, entropy
-    pass
+    for idx, watermarker in enumerate(annotated_watermarks):
+        print(f"Plotting {watermarker}")
+        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
+        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        plt.suptitle(watermarker)
+
+        for idm, mutator in enumerate(mutators):
+            print(f"\tPlotting for {mutator}")
+            traces = sorted(glob.glob(f"./attack/traces/?*{watermarker}_{mutator}?*annotated?*"))
+            
+            # key is (prompt, trace_num) -> data
+            initial_data = {}
+            final_data = {}
+
+            trace_num_from_prompt = defaultdict(int)
+
+            for trace in traces:
+                trace_df = pd.read_csv(trace)
+
+                if "internlm_quality" not in trace_df.columns or "watermark_score" not in trace_df.columns:
+                    print(f"Skipping {trace}") 
+                    continue
+                
+                if "Adaptive" in trace:
+                    trace_df = trace_df[trace_df["watermark_score"] != 0]
+
+                trace_df = trace_df[trace_df["quality_preserved"] == True]
+                trace_df = trace_df[["step_num", "watermark_score", "internlm_quality", "prompt"]]
+
+                # NOTE: This will contain trace data for multiple attack runs, and not necessarily from step 0/-1!!!!
+                for prompt, group in trace_df.groupby('prompt'):
+                    # Thank ChatGPT for this genius idea 
+                    group['trace_num'] = (group['step_num'] == -1).cumsum()
+
+                    for run_num, attack in group.groupby('trace_num'):
+                        trace_num_from_prompt[prompt] += 1
+                        trace_num = trace_num_from_prompt[prompt]
+                        
+                        # case 1: `attack` contains full attack trace 
+                        #   initial row is present
+                        #   min zscore row is present
+                        # case 2: `attack` contains beginning of trace
+                        #   initial row is present
+                        #   min zscore row may or may not be present
+                        # case 3: `attack` contains end of trace
+                        #   initial row is not present
+                        #   min zscore row may or may not be present
+
+                        initial_row = attack[attack["step_num"] == -1]
+                        min_zscore_row = attack[attack.watermark_score == attack.watermark_score.min()]
+                        key = (prompt, trace_num)
+
+                        if len(initial_row) != 0:
+                            initial_data[key] = [initial_row["internlm_quality"].iloc[0], initial_row["watermark_score"].iloc[0]]
+                        if key not in final_data or final_data[key][1] > min_zscore_row["watermark_score"].iloc[0]:
+                            final_data[key] = [min_zscore_row["internlm_quality"].iloc[0], min_zscore_row["watermark_score"].iloc[0]]
+            
+            initial_data = pd.DataFrame.from_dict(initial_data, orient="index", columns=["quality", "zscores"])
+            final_data = pd.DataFrame.from_dict(final_data, orient="index", columns=["quality", "zscores"])
+
+            axs[idm].scatter(final_data["zscores"], final_data["quality"], label="Minimum z-score")
+            axs[idm].scatter(initial_data["zscores"], initial_data["quality"], label="Initial")
+
+            if "Adaptive" in trace:
+                axs[idm].set_xlabel("Adaptive Score")
+            else:
+                axs[idm].set_xlabel("Z-score")
+            axs[idm].set_ylabel(f"InternLM Quality")
+            #axs[idm].set_ylim(-.05, 1.05)
+            axs[idm].set_title(mutator)
+            axs[idm].legend()
+        
+        plt.savefig(f"./attack/analysis/figs/zscore_vs_quality_{watermarker}.png")
+
+
 
 def plot_estimated_watermark_breaking():
-    # split across watermark, mutator, entropy?
-    pass
+    # dimensions to consider: watermark type, mutator, entropy level
+
+    for idx, watermarker in enumerate(annotated_watermarks):
+        print(f"Plotting {watermarker}")
+        fig, axs = plt.subplots(2, 3, figsize=(30, 18))
+        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        plt.suptitle(watermarker)
+
+        for idm, mutator in enumerate(mutators):
+            print(f"\tPlotting for {mutator}")
+            traces = sorted(glob.glob(f"./attack/traces/?*{watermarker}_{mutator}?*_annotated?*"))
+            
+            trace_num_from_prompt = defaultdict(int)
+            initial_quality = {}
+
+            for trace in traces:
+                trace_df = pd.read_csv(trace)
+
+                if "watermark_score" not in trace_df.columns:
+                    print(f"Skipping {trace}")
+                    continue
+
+                trace_df = trace_df[["step_num", "prompt", "watermark_score", "quality_preserved"]]
+                trace_df = trace_df[trace_df["quality_preserved"] == True]
+                if "Adaptive" in trace:
+                    trace_df = trace_df[trace_df["watermark_score"] != 0]
+
+                # NOTE: This will contain trace data for multiple attack runs, and not necessarily from step 0/-1!!!!
+                for prompt, group in trace_df.groupby('prompt'):
+                    group['trace_num'] = (group['step_num'] == -1).cumsum()
+
+                    for run_num, attack in group.groupby('trace_num'):
+                        if attack["step_num"].min() == -1:
+                            trace_num_from_prompt[prompt] += 1
+                        trace_num = trace_num_from_prompt[prompt]
+
+                        entropy = prompt_to_entropy(prompt)
+                        color = entropy_colors[entropy-1]
+                        key = (prompt, trace_num)
+
+                        initial = attack[attack["step_num"] == -1]
+                        if len(initial) != 0:
+                            initial_quality[key] = initial["watermark_score"].iloc[0]
+
+                        axs[idm].plot(attack["step_num"], attack["watermark_score"], alpha=.8, color=color, label=(prompt+str(entropy)+str(trace_num)))
+                        
+            axs[idm].set_xlabel("Step Number")
+            if "Adaptive" in trace:
+                axs[idm].set_ylabel(f"Adaptive Score")
+            else:
+                axs[idm].set_ylabel(f"Z-score")
+            axs[idm].set_title(mutator)
+
+            # TODO: set legend for colors 
+            sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
+            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
+            cbar.set_label('Entropy Level')
+        
+        plt.savefig(f"./attack/analysis/figs/watermark_{watermarker}.png")
 
 
 def prompt_to_entropy(prompt):
@@ -168,5 +303,6 @@ def row_to_entropy(row):
             case 664: return 10
 
 if __name__ ==  "__main__":
-    plot_sliding_window_success_rates()
-             
+    # plot_sliding_window_success_rates()
+    plot_quality_degredation_vs_zscore()
+    plot_estimated_watermark_breaking()
