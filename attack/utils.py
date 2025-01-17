@@ -5,7 +5,8 @@ import json
 import datetime
 import textwrap
 import string
-from openai import OpenAI
+import glob
+# from openai import OpenAI
 import difflib
 
 from dotenv import load_dotenv, find_dotenv
@@ -318,6 +319,42 @@ def load_all_csvs_for_mutator(base_dir, mutator_str):
     # Build a glob pattern that matches anything containing the mutator_str,
     # followed by anything, and ending with .csv
     pattern = os.path.join(base_dir, f"*{mutator_str}*.csv")
+
+    # Get all matching CSV files
+    csv_files = glob.glob(pattern)
+
+    # Sort them so part1 < part2 < part3, etc. (if you have chunked files)
+    csv_files.sort()
+
+    # Read each CSV into a list of DataFrames
+    dataframes = []
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+        dataframes.append(df)
+
+    # Concatenate into one DataFrame
+    if dataframes:
+        return pd.concat(dataframes, ignore_index=True)
+    else:
+        return pd.DataFrame()
+    
+def load_all_csvs(base_dir, watermark_str, mutator_str):
+    """
+    Searches anywhere in the filename for the given `mutator_str`
+    (e.g. "WordMutator", "SentenceMutator", etc.) and loads all
+    such CSV files into one DataFrame.
+
+    For instance, if mutator_str = "WordMutator", this will match:
+        InternLMOracle_GPT4o_unwatermarked_WordMutator_n-steps=1000_attack_results_part6.csv
+    and any other CSV that includes the substring "WordMutator".
+
+    Returns a Pandas DataFrame concatenating all matches.
+    If no files match, returns an empty DataFrame.
+    """
+
+    # Build a glob pattern that matches anything containing the mutator_str,
+    # followed by anything, and ending with .csv
+    pattern = os.path.join(base_dir, f"*?*{watermark_str}_{mutator_str}?*annotated?*")
 
     # Get all matching CSV files
     csv_files = glob.glob(pattern)
