@@ -59,7 +59,7 @@ def process_attack_traces(directory):
     file_groups = {}
     
     for filename in os.listdir(directory):
-        if "annotated" in filename:
+        if "annotated" in filename or "DocumentMutator" in filename:
             continue
         if 'results' in filename:
             base_name = '_'.join(filename.split('_part')[0].split('_')[:-1])

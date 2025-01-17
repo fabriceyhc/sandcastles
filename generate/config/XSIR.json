@@ -5,8 +5,8 @@
     "scale_dimension": 300,
     "z_threshold": 0.2,
     "transform_model_input_dim": 768,
-    "dictionary": "/home/fabricehc/anaconda3/envs/sandcastles/lib/python3.11/site-packages/markllm/watermark/xsir/dictionary/dictionary.txt",
-    "transform_model_name": "/home/fabricehc/anaconda3/envs/sandcastles/lib/python3.11/site-packages/markllm/watermark/xsir/model/transform_model_x-sbert_10K.pth",
-    "embedding_model_path": "/data2/.shared_models/paraphrase-multilingual-mpnet-base-v2",
-    "mapping_name": "/home/fabricehc/anaconda3/envs/sandcastles/lib/python3.11/site-packages/markllm/watermark/xsir/mapping/300_mapping_128256.json"
+    "dictionary": "watermark/xsir/dictionary/dictionary.txt",
+    "transform_model_name": "watermark/xsir/model/transform_model_x-sbert_10K.pth",
+    "embedding_model_path": "watermark/xsir/model/paraphrase-multilingual-mpnet-base-v2",
+    "mapping_name": "watermark/xsir/mapping/300_mapping_opt_1_3b.json"
 }
