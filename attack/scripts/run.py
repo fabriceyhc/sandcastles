@@ -22,22 +22,21 @@ def main(cfg):
     cfg.attack.check_watermark = False
 
     datasets = [
-        # "GPT4o_unwatermarked",
-        # "GPT4o_small",
-        "unwatermarked",
-        # "Adaptive",
-        # "EXP",
         # "KGW",
+        "SIR",
+        # "Adaptive",
+        # "GPT4o_unwatermarked",
+        # "unwatermarked",
     ]
 
     mutators = [
         # EntropyWordMutator, 
-        WordMutator,
-        SpanMutator,
-        SentenceMutator,
+        # WordMutator,
+        # SpanMutator,
+        # SentenceMutator,
         # Document1StepMutator,
         # Document2StepMutator,
-        # DocumentMutator,
+        DocumentMutator,
     ]
 
     # Initialize Quality Oracle
