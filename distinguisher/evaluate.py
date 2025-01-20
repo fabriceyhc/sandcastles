@@ -1,50 +1,18 @@
 # ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
 
 from guidance import models
-from distinguisher.models import (AggressiveSimple, SimpleGPT, ReasoningDistinguisher, SimpleDistinguisher)
-from distinguisher.utils import all_attacks
+from distinguisher.models import (AggressiveSimple, SimpleGPT, ReasoningDistinguisher, SimpleDistinguisher, SimplestGPT)
+from distinguisher.utils import process_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe
 import pandas as pd
 import os
 import datasets
 from dotenv import load_dotenv, find_dotenv
 import logging
-from itertools import combinations
 
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 
-# load_dotenv(find_dotenv())
-# chatgpt = models.OpenAI("gpt-4o-mini")
-
-def extract_unique_column_value(df, column_name):
-    """
-    Checks if all values in the specified column are identical.
-    If so, returns that value. Otherwise, raises an Exception.
-    
-    Parameters:
-    - df (pd.DataFrame): The DataFrame to check.
-    - column_name (str): The column to verify.
-    
-    Returns:
-    - The unique value in the column.
-    
-    Raises:
-    - Exception: If the column contains multiple unique values.
-    """
-    if column_name not in df.columns:
-        raise ValueError(f"Column '{column_name}' does not exist in the DataFrame.")
-    
-    unique_count = df[column_name].nunique()
-    if unique_count == 1:
-        return df[column_name].iloc[0]
-    else:
-        unique_values = df[column_name].unique()
-        raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
-
-def split_dataframe(df, chunk_size):
-    return [df.iloc[i:i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
 
 class AttackParser():
     def __init__(self, file, df=None):
@@ -55,11 +23,13 @@ class AttackParser():
         df = df[df['step_num'] <= end.values[0]]
         df = df.drop_duplicates(subset=['mutation_num'], keep='last').reset_index(drop=True)
 
-        df.at[0, 'mutated_text'] = df.at[0, 'current_text']
+        if df.at[0, 'mutated_text'] != df.at[0, 'mutated_text']: # NaN check
+            df.at[0, 'mutated_text'] = df.at[0, 'current_text']
 
         # check for consistency
         for i, row in df.iterrows():
             if i == 0:
+                assert row['step_num'] == -1, "First row is not step -1"
                 continue  # Skip the first row
 
             # Check current_text matches mutated_text from the previous row
@@ -73,8 +43,12 @@ class AttackParser():
                 log.error(f"Row {i} mutation_num mismatch. Current: {row.to_dict()}, Previous: {prev_row.to_dict()}")
                 assert i == row['mutation_num'], f"Row {i} does not match mutation_num"
                 
+        self.prompt = df.loc[0, 'prompt']
         self.response = df.loc[0, 'current_text']
         self.df = df['mutated_text']
+
+    def get_prompt(self):
+        return self.prompt
     
     def get_response(self):
         return self.response
@@ -85,42 +59,14 @@ class AttackParser():
     def get_nth(self, n):
         return self.df[n]
 
-def get_id_tuples(num=10):
-    """
-    Generates unique pairs of numbers within groups of three from 1 to `num`.
-    Each pair is annotated with the group number it belongs to.
-
-    Parameters:
-    num (int): The maximum number to generate pairs up to. Default is 30.
-
-    Returns:
-    list of tuples: Each tuple contains two numbers forming a pair and the group number.
-    """
-    # Initialize an empty list to store the pairs
-    pairs = []
-    
-    # Use enumerate to keep track of the group number, starting at 0
-    for group_num, start in enumerate(range(0, num, 3), start=1):
-        # Define the current group of three numbers
-        group = range(start, start + 3)
-        
-        # Generate all unique pairs within the group
-        for pair in combinations(group, 2):
-            # Check if the second number in the pair does not exceed 'num'
-            if pair[1] <= num:
-                # Append the pair along with the group number to the list
-                pairs.append((*pair, group_num))
-    
-    return pairs
-
-def distinguish_attacks(sd, df, length_of_df):
+def distinguish_attacks(sd, df, length_of_df, prefix):
     o_str = extract_unique_column_value(df, "o_str")
     m_str = extract_unique_column_value(df, "m_str")
     w_str = extract_unique_column_value(df, "w_str")
     prompt_type = extract_unique_column_value(df, "prompt_type")
     ids = get_id_tuples(length_of_df)
 
-    output_path=f"distinguisher/results/long_{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
+    output_path=f"distinguisher/results/{prefix}_{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
 
     log.info(f"Oracle: {o_str}")
     log.info(f"Mutator: {m_str}")
@@ -131,35 +77,49 @@ def distinguish_attacks(sd, df, length_of_df):
         log.info(f"Path {output_path} already exists, returning...")
         return
 
-    for attack1_id, attack2_id, entropy in ids:
-        
-        origin_A = AttackParser(None, df.iloc[attack1_id]['attack_data'])
-        origin_B = AttackParser(None, df.iloc[attack2_id]['attack_data'])
-        dataset = []
-        for n in range(min(len(origin_A), len(origin_B))):
-            dataset.append({
-                "P": origin_A.get_nth(n),
-                "Num": n,
-                "Origin": "A",
-            })
-            dataset.append({
-                "P": origin_B.get_nth(n),
-                "Num": n,
-                "Origin": "B",
-            })
-        sd.set_origin(origin_A.get_response(), origin_B.get_response())
-        dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
-        dataset = sd.distinguish(dataset).to_pandas()
-        dataset["o_str"] = o_str
-        dataset["w_str"] = w_str
-        dataset["m_str"] = m_str
-        dataset["prompt_type"] = prompt_type
-        dataset["entropy"] = entropy
-        dataset["attack1_id"] = attack1_id
-        dataset["attack2_id"] = attack2_id
-        dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
+    for i, (attack1_id, attack2_id, entropy) in enumerate(ids):
+        log.info(f"Processing attack pair {i+1}/{len(ids)}")
+        origins = {
+            'A': AttackParser(None, df.iloc[attack1_id]['attack_data']),
+            'B': AttackParser(None, df.iloc[attack2_id]['attack_data'])
+        }
+        sd.set_origin(origins['A'].get_response(), origins['B'].get_response())
+        for origin, attack in origins.items():
+            dataset = []
+            for n in range(len(attack)):
+                dataset.append({
+                    "P": attack.get_nth(n),
+                    "Num": n,
+                    "Origin": origin,
+                })
+            dataset = dataset[-5:]
+            dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
+            dataset = sd.distinguish(dataset).to_pandas()
+            dataset["prompt"] = attack.get_prompt()
+            dataset["origin_A"] = origins['A'].get_response()
+            dataset["origin_B"] = origins['B'].get_response()
+            dataset["o_str"] = o_str
+            dataset["w_str"] = w_str
+            dataset["m_str"] = m_str
+            dataset["prompt_type"] = prompt_type
+            dataset["entropy"] = entropy
+            dataset["attack1_id"] = attack1_id
+            dataset["attack2_id"] = attack2_id
+            dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
 
 def main():
+    # Directory containing attack traces
+    attack_trace_dir = "attack/traces/"
+
+    # Filter to parse only files that evaluate as True
+    filter_func = lambda x: "distinguisher" in x
+
+    all_attacks = process_attack_traces(attack_trace_dir, filter_func)
+
+    # TODO: Use the lambda function to filter the attacks
+    # Reading all the traces then filtering takes unnecessarily long and too much RAM
+
+    df = pd.DataFrame(all_attacks)
 
     distinguisher_persona = \
     """
@@ -176,19 +136,15 @@ def main():
         n_ctx=4096
     )
 
-    df = pd.DataFrame(all_attacks)
-
-    # TODO: Adjust this to pick which attacks to distinguish.
-    # df = df[df['w_str'].isin(['GPT4o_small'])] # GPT4o_unwatermarked, KGW, Adaptive,
-    # df = df[df['w_str'].isin(['GPT4o_unwatermarked', 'KGW', 'Adaptive'])]
-    # df = df[df['m_str'].isin(["WordMutator", "SpanMutator", "SentenceMutator"])]
-    # df = df[df['m_str'].isin(["SentenceMutator"])] # Document1StepMutator, Document2StepMutator, DocumentMutator
-    df = df[df['n_steps'] == '500']
+    load_dotenv(find_dotenv())
+    chatgpt = models.OpenAI("gpt-4o-mini")
 
     length_of_df = 30
     # sd = AggressiveSimple(llm, distinguisher_persona, None, None)
     # sd = ReasoningDistinguisher(llm, distinguisher_persona, None, None)
-    sd = SimpleDistinguisher(llm, distinguisher_persona, None, None)
+    # sd = SimpleGPT(llm, distinguisher_persona, None, None)
+    sd = SimplestGPT(llm, distinguisher_persona, None, None)
+    # sd = SimplestGPT(chatgpt, None, None, None)
 
     unique_values = df['m_str'].unique()
     dfs_by_m_str = {value: df[df['m_str'] == value].copy() for value in unique_values}
@@ -200,14 +156,10 @@ def main():
         split_dfs = split_dataframe(dataframe, length_of_df)
 
         # Add "prompt_type" column to each split
-        split_dfs[0]['prompt_type'] = 'paris'
-        split_dfs[1]['prompt_type'] = 'space'
-        split_dfs[2]['prompt_type'] = 'news'
+        split_dfs[0]['prompt_type'] = 'test'
 
         further_split_dfs[key] = {
             f'{key}_part1': split_dfs[0],
-            f'{key}_part2': split_dfs[1],
-            f'{key}_part3': split_dfs[2]
         }
 
     # log.info(f"Further split: {further_split_dfs}")
@@ -220,8 +172,9 @@ def main():
     parts = [part for splits in further_split_dfs.values() for part in splits.values()]
     log.info(f"Number of parts: {len(parts)}")
 
-    for part in parts:
-        distinguish_attacks(sd, part, length_of_df)
+    for i, part in enumerate(parts):
+        log.info(f"Processing part {i+1}/{len(parts)}")
+        distinguish_attacks(sd, part, length_of_df, "llama3.1-8B")
 
 if __name__ == "__main__":
     main()

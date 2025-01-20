@@ -2,6 +2,37 @@ import guidance
 from guidance import gen, select, user, system, assistant, instruction
 from distinguisher.models.base import Distinguisher
 
+class SimplestGPT(Distinguisher):
+    @staticmethod
+    @guidance
+    def prompt_fn(lm, persona, **kwargs):
+        if persona:
+            with system():
+                lm += f"{persona}"
+        with user():
+            lm += f"""
+            Modified text: {kwargs["P"]}
+            ___________________________________________________________
+            Original response A: {kwargs["A"]}
+            __________________________________________________________
+            Original response B: {kwargs["B"]}
+            __________________________________________________________
+            Which response does the modified text come from?
+
+            Reply with only one character.
+            """
+        with assistant():
+            lm += f"""{gen(name="choice", regex="A|B", temperature=0.7, max_tokens=1)}"""
+        return lm
+
+    @property
+    def input_keys(self):
+        return ["P"]
+
+    @property
+    def output_keys(self):
+        return ["choice"]
+
 class SimpleGPT(Distinguisher):
     @staticmethod
     @guidance
