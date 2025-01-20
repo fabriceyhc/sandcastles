@@ -27,6 +27,8 @@ def main(cfg):
         # "Adaptive",
         # "GPT4o_unwatermarked",
         # "unwatermarked",
+        # "Adaptive",
+        # "distinguisher",
     ]
 
     mutators = [
