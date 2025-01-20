@@ -32,11 +32,11 @@ def main(cfg):
     mutators = [
         # EntropyWordMutator, 
         # WordMutator,
-        # SpanMutator,
-        # SentenceMutator,
-        # Document1StepMutator,
-        # Document2StepMutator,
-        DocumentMutator,
+        SpanMutator,
+        SentenceMutator,
+        Document1StepMutator,
+        Document2StepMutator,
+        # DocumentMutator,
     ]
 
     # Initialize Quality Oracle
