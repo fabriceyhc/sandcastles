@@ -1,7 +1,7 @@
 # ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
 
 from guidance import models
-from distinguisher.models import (AggressiveSimple, SimpleGPT, ReasoningDistinguisher, SimpleDistinguisher, SimplestGPT)
+from distinguisher.models import (SimpleDistinguisher, AggressiveSimple, SimpleGPT, SimplestGPT, LogicGPT, LogicSimple, LogicSimplest)
 from distinguisher.utils import process_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe
 import pandas as pd
 import os
@@ -92,6 +92,7 @@ def distinguish_attacks(sd, df, length_of_df, prefix):
                     "Num": n,
                     "Origin": origin,
                 })
+            # TODO: Remove this line when running on full dataset
             dataset = dataset[-5:]
             dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
             dataset = sd.distinguish(dataset).to_pandas()
@@ -130,20 +131,22 @@ def main():
     # """
 
     llm = models.LlamaCpp(
-        model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf",
+        # model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf",
+        model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-q8_0.gguf",
+        # model="/data2/.shared_models/llama.cpp_models/Llama-3.3-70B-Instruct-GGUF/Llama-3.3-70B-Instruct.Q8_0.gguf-00001-of-00006.gguf",
         echo=False,
         n_gpu_layers=-1,
         n_ctx=4096
     )
 
-    load_dotenv(find_dotenv())
-    chatgpt = models.OpenAI("gpt-4o-mini")
+    # load_dotenv(find_dotenv())
+    # chatgpt = models.OpenAI("gpt-4o-mini")
 
     length_of_df = 30
     # sd = AggressiveSimple(llm, distinguisher_persona, None, None)
     # sd = ReasoningDistinguisher(llm, distinguisher_persona, None, None)
     # sd = SimpleGPT(llm, distinguisher_persona, None, None)
-    sd = SimplestGPT(llm, distinguisher_persona, None, None)
+    # sd = SimplestGPT(llm, distinguisher_persona, None, None)
     # sd = SimplestGPT(chatgpt, None, None, None)
 
     unique_values = df['m_str'].unique()
@@ -172,9 +175,10 @@ def main():
     parts = [part for splits in further_split_dfs.values() for part in splits.values()]
     log.info(f"Number of parts: {len(parts)}")
 
-    for i, part in enumerate(parts):
-        log.info(f"Processing part {i+1}/{len(parts)}")
-        distinguish_attacks(sd, part, length_of_df, "llama3.1-8B")
+    for sd in [SimpleDistinguisher(llm, distinguisher_persona), AggressiveSimple(llm, distinguisher_persona), LogicGPT(llm, distinguisher_persona)]:
+        for i, part in enumerate(parts):
+            log.info(f"Processing part {i+1}/{len(parts)}")
+            distinguish_attacks(sd, part, length_of_df, "llama3.1-70B")
 
 if __name__ == "__main__":
     main()
