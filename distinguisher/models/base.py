@@ -4,7 +4,7 @@ import datasets
 
 # Abstract base class for all distinguishers
 class Distinguisher(ABC):
-    def __init__(self, llm, persona, origin_A, origin_B):
+    def __init__(self, llm, persona, origin_A = None, origin_B = None):
         self.llm = llm
         self.persona = persona
         self.origin_A = origin_A
