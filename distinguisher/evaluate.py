@@ -2,14 +2,13 @@
 
 from guidance import models
 from distinguisher.models import (AggressiveSimple, SimpleGPT, ReasoningDistinguisher, SimpleDistinguisher)
-from distinguisher.utils import all_attacks
+from distinguisher.utils import all_attacks, extract_unique_column_value
 import pandas as pd
 import os
 import datasets
 from dotenv import load_dotenv, find_dotenv
 import logging
 from itertools import combinations
-
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
@@ -18,30 +17,6 @@ logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
 # load_dotenv(find_dotenv())
 # chatgpt = models.OpenAI("gpt-4o-mini")
 
-def extract_unique_column_value(df, column_name):
-    """
-    Checks if all values in the specified column are identical.
-    If so, returns that value. Otherwise, raises an Exception.
-    
-    Parameters:
-    - df (pd.DataFrame): The DataFrame to check.
-    - column_name (str): The column to verify.
-    
-    Returns:
-    - The unique value in the column.
-    
-    Raises:
-    - Exception: If the column contains multiple unique values.
-    """
-    if column_name not in df.columns:
-        raise ValueError(f"Column '{column_name}' does not exist in the DataFrame.")
-    
-    unique_count = df[column_name].nunique()
-    if unique_count == 1:
-        return df[column_name].iloc[0]
-    else:
-        unique_values = df[column_name].unique()
-        raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
 
 def split_dataframe(df, chunk_size):
     return [df.iloc[i:i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
