@@ -12,9 +12,9 @@ from attack.utils import load_all_csvs
 mutators = ["Document1StepMutator", "Document2StepMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
 watermarks = ["GPT4o_unwatermarked", "Adaptive", "KGW", "SIR"]
 watermark_thresholds = {
-    "Adaptive" : 60,
-    "KGW" : .25,
-    "SIR": .25,
+    "Adaptive" : 70,
+    "KGW" : .50,
+    "SIR": .20,
 }
 annotated_watermarks = ["KGW", "Adaptive", "SIR"]
 quality_watermarks = ["KGW", "GPT4o_unwatermarked"]
@@ -152,124 +152,196 @@ def plot_quality_degredation_vs_zscore():
         
         plt.savefig(f"./attack/analysis/figs/zscore_vs_quality_{watermarker}.png")
 
-
-
 def plot_estimated_watermark_breaking():
-    # dimensions to consider: watermark type, mutator, entropy level
-
-    for idx, watermarker in enumerate(annotated_watermarks):
-        print(f"Plotting {watermarker}")
+    for watermarker in annotated_watermarks:
         fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        axs = [axs[0,0], axs[0,1], axs[0,2],
+               axs[1,0], axs[1,1], axs[1,2]]
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
+            ax = axs[idm]
+            ax.set_title(mutator)
+
             print(f"\tPlotting for {mutator}")
-            
-            all_data = pd.DataFrame(columns=["step_num", "watermark_score"])
-            final_data = [pd.DataFrame(columns=["step_num", "watermark_score"]) for e in range(1,11)]
-            step_num_count_per_entropy = [defaultdict(int) for i in range(10)]
-            # for each entropy: a dictionary for the number of instances of each step
-            # this is because there's an error in the adaptive traces where the number of instances of each
-            # step size is not uniform. We don't even watermark most rows, but the number
+
+            # Prepare containers for each entropy level (1..10)
+            final_data = [
+                pd.DataFrame(columns=["step_num", "watermark_score"])
+                for _ in range(10)
+            ]
+            step_num_count_per_entropy = [defaultdict(int) for _ in range(10)]
             num_traces_per_entropy = [0] * 10
 
-            axs[idm].set_xlabel("Step Number")
+            ax = axs[idm]
+            ax.set_xlabel("Step Number")
             if "Adaptive" in watermarker:
-                axs[idm].set_ylabel(f"Adaptive Score")
+                ax.set_ylabel("Adaptive Score")
             else:
-                axs[idm].set_ylabel(f"Z-score")
-            axs[idm].set_title(mutator)
+                ax.set_ylabel("Z-score")
+            ax.set_title(mutator)
 
+            # Add colorbar
             sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
-            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
+            cbar = plt.colorbar(sm, ax=ax, orientation='vertical')
             cbar.set_label('Entropy Level')
-        
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
 
+            # Load data
+            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
             if "watermark_score" not in trace_df.columns:
                 print(f"\t\tNo watermark scores! Skipping {watermarker}, {mutator}")
                 continue
+
+            # For Adaptive, remove rows with zero watermark_score
             if "Adaptive" in watermarker:
                 trace_df = trace_df[trace_df["watermark_score"] != 0]
 
             trace_df = trace_df[["step_num", "prompt", "watermark_score", "quality_preserved"]]
             if "Adaptive" not in watermarker:
                 trace_df = trace_df[trace_df["quality_preserved"] == True]
+
+            # Group each run by 'trace_num'
             trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
 
+            # Fill final_data[i] for each entropy i
             for run_num, attack in trace_df.groupby('trace_num'):
+                # You’ll need your own function to convert prompt -> integer [1..10]
                 entropy = prompt_to_entropy(attack["prompt"].iloc[0])
 
                 if "Adaptive" in watermarker:
+                    # Possibly adjust or bin steps for Adaptive
                     stride = num_steps(mutator)//10
 
                     def round_stride(x):
-                        if x == stride*10:
+                        if x == stride * 10:
                             return x
                         if x % stride < stride // 2:
-                            return (x // stride) * stride - 1 
+                            return (x // stride) * stride - 1
                         else:
                             return (x // stride + 1) * stride - 1
 
                     attack["step_num"] = attack["step_num"].apply(round_stride)
-                    
-                    for idx, step in attack.iterrows():
-                        step_num_count_per_entropy[entropy-1][step["step_num"]] += 1 
-
+                    for idx2, step in attack.iterrows():
+                        step_num_count_per_entropy[entropy-1][step["step_num"]] += 1
                 else:
                     num_traces_per_entropy[entropy-1] += 1
-                
-                final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", "watermark_score"]]]).groupby("step_num", as_index=False).sum()
-                all_data = pd.concat([all_data, attack[["step_num", "watermark_score"]]])
-                    
-            for i, entropy_df in enumerate(final_data):
-                color = entropy_colors[i]
 
+                # Sum watermark_score by step_num for that entropy
+                final_data[entropy-1] = pd.concat([
+                    final_data[entropy-1],
+                    attack[["step_num", "watermark_score"]]
+                ]).groupby("step_num", as_index=False).sum()
+
+            # Plot each entropy curve separately
+            for i, entropy_df in enumerate(final_data):
+                if entropy_df.empty:
+                    continue
+
+                # Average out scores
                 if "Adaptive" in watermarker:
                     entropy_df["watermark_score"] = entropy_df.apply(
-                        lambda row: row["watermark_score"] / step_num_count_per_entropy[i][row["step_num"]],
-                        axis=1)
-                    axs[idm].plot(entropy_df["step_num"], entropy_df["watermark_score"], alpha=.8, color=color)
+                        lambda row: row["watermark_score"] /
+                                    step_num_count_per_entropy[i].get(row["step_num"], 1),
+                        axis=1
+                    )
                 else:
-                    entropy_df["watermark_score"] = entropy_df["watermark_score"]/num_traces_per_entropy[i]
+                    if num_traces_per_entropy[i] > 0:
+                        entropy_df["watermark_score"] /= num_traces_per_entropy[i]
+
+                # Sort by step_num and optionally smooth for adaptive
+                entropy_df.sort_values("step_num", inplace=True)
+                
+                if "Adaptive" not in watermarker:
                     entropy_df["watermark_score"] = entropy_df["watermark_score"].rolling(window=num_steps(mutator), min_periods=1).mean()
-                    axs[idm].plot(entropy_df["step_num"], entropy_df["watermark_score"], alpha=.8, color=color)
-            
-            # rough estimates
-            if "Adaptive" in watermarker:
-                initial_point = 40 
-                final_point = 20 
-                func = exponential50
-                threshold = watermark_thresholds[watermarker]-50
-            else:
-                initial_point = 4
-                final_point = 2
-                func = exponential
-                threshold = watermark_thresholds[watermarker]
 
-            params, cov = curve_fit(func, 
-                all_data["step_num"].to_numpy(), all_data["watermark_score"].to_numpy(),
-                p0=[initial_point, 100],
+                # Plot the actual curve (per entropy)
+                ax.plot(
+                    entropy_df["step_num"],
+                    entropy_df["watermark_score"],
+                    alpha=0.8,
+                    color=entropy_colors[i]
                 )
-            
-            crossing_point = np.log(params[0]/threshold) * params[1]
-            print(f"\t\t{crossing_point} steps to {threshold}")
-            print(f"\t\t{params}")
 
-            x = np.linspace(0, num_steps(mutator), num_steps(mutator)//10)
-            y = func(x, params[0], params[1])
+            # Combine per-entropy data to get a single DataFrame
+            all_entropy_df = pd.concat(final_data)
+            if not all_entropy_df.empty:
+                # Average over step_num
+                mean_df = (
+                    all_entropy_df.groupby("step_num", as_index=False)["watermark_score"]
+                    .mean()
+                    .sort_values("step_num")
+                )
+                xdata = mean_df["step_num"].values
+                ydata = mean_df["watermark_score"].values
 
-            axs[idm].plot(x, y, linewidth=3, linestyle="dotted", 
-                label=f"Est. steps to break ({threshold + (50 if 'Adaptive' in watermarker else 0)}): {int(crossing_point)} steps")
-            axs[idm].legend()
-            if "Adaptive" in watermarker:
-                axs[idm].set_ylim(45, 105)
+                # Plot the mean curve
+                ax.plot(xdata, ydata, color="black", alpha=0.7, label="_nolegend_")
+
+                # Only fit if we have enough points
+                if len(xdata) > 5:
+                    p0 = [
+                        max(ydata) - min(ydata),  # A0
+                        50.0,                    # B0
+                        min(ydata),              # C0
+                    ]
+                    bounds = ([0, 0, -np.inf], [np.inf, np.inf, np.inf])
+
+                    try:
+                        popt, _ = curve_fit(exponential_offset, xdata, ydata,
+                                            p0=p0, bounds=bounds)
+                        A_fit, B_fit, C_fit = popt
+
+                        # 1) Compute the crossing time from the fitted parameters
+                        threshold = watermark_thresholds[watermarker]
+                        crossing_point = None
+                        if A_fit > 0 and threshold > C_fit and threshold < (A_fit + C_fit):
+                            from math import log
+                            cp = B_fit * log(A_fit / (threshold - C_fit))
+                            crossing_point = max(cp, 0)
+                        
+                        # 2) Plot the fitted curve ONLY out to num_steps(mutator)
+                        #    (so if crossing > 1000, the line ends at 1000, but we still label crossing=2438 steps)
+                        x_max = num_steps(mutator)
+                        x_fine = np.linspace(0, x_max, 200)
+                        y_fine = exponential_offset(x_fine, A_fit, B_fit, C_fit)
+
+                        # Show dotted line. Put crossing in the label either way.
+                        if crossing_point is not None:
+                            lbl = f"Est. steps to break @ {threshold}: {int(crossing_point)} steps"
+                        else:
+                            lbl = f"Est. steps to break @ {threshold}: Infinity"
+
+                        ax.plot(
+                            x_fine, y_fine,
+                            linestyle="dotted", linewidth=3,
+                            label=lbl
+                        )
+                        ax.legend()
+
+                    except RuntimeError:
+                        # Fit failed
+                        ax.plot([], [], ' ', label=f"No break found (threshold={threshold})")
+                        ax.legend()
+
+                else:
+                    ax.plot([], [], ' ', label="Not enough points to fit")
+                    ax.legend()
             else:
-                axs[idm].set_ylim(bottom=-1)
+                ax.plot([], [], ' ', label="No data found")
+                ax.legend()
 
-            
+        if "Adaptive" in watermarker:
+            global_min = 50
+            global_max = 100
+        else:
+            global_min = 0
+            global_max = 7
+        
+        for ax in axs:
+            ax.set_ylim(global_min, global_max)
+
         plt.savefig(f"./attack/analysis/figs/estimated_breaking_{watermarker}.png")
+        plt.close(fig)
 
 
 
@@ -442,11 +514,26 @@ def num_steps(mutator):
 
 def exponential(x, a, b):
     return a * np.e**(x / (-b))
+
 def exponential50(x, a, b):
     return a * np.e**(x / (-b)) + 50
 
+def exponential_offset(x, A, B, C):
+    """
+    A * exp(-x / B) + C
+
+    Where:
+    - A > 0 is the initial amplitude (roughly the difference between starting and offset).
+    - B > 0 is the decay constant (larger means slower decay).
+    - C is the asymptote or baseline (the curve flattens near y = C).
+    """
+    return A * np.exp(-x / B) + C
+
 
 if __name__ ==  "__main__":
+
+    # python -m attack.analysis.attack_efficiency_analysis
+
     # plot_sliding_window_success_rates()
     # plot_quality_degredation_vs_zscore()
     plot_estimated_watermark_breaking()
