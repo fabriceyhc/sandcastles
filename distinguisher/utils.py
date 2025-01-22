@@ -1,13 +1,62 @@
 import os
 import pandas as pd
-import logging
+from itertools import combinations
 
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger(__name__)
-logging.getLogger('optimum.gptq.quantizer').setLevel(logging.WARNING)
+def extract_unique_column_value(df, column_name):
+    """
+    Checks if all values in the specified column are identical.
+    If so, returns that value. Otherwise, raises an Exception.
+    
+    Parameters:
+    - df (pd.DataFrame): The DataFrame to check.
+    - column_name (str): The column to verify.
+    
+    Returns:
+    - The unique value in the column.
+    
+    Raises:
+    - Exception: If the column contains multiple unique values.
+    """
+    if column_name not in df.columns:
+        raise ValueError(f"Column '{column_name}' does not exist in the DataFrame.")
+    
+    unique_count = df[column_name].nunique()
+    if unique_count == 1:
+        return df[column_name].iloc[0]
+    else:
+        unique_values = df[column_name].unique()
+        raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
 
-# Directory containing attack trace files
-attack_trace_dir = "attack/traces/"
+def split_dataframe(df, chunk_size):
+    return [df.iloc[i:i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
+
+def get_id_tuples(num=10):
+    """
+    Generates unique pairs of numbers within groups of three from 1 to `num`.
+    Each pair is annotated with the group number it belongs to.
+
+    Parameters:
+    num (int): The maximum number to generate pairs up to. Default is 30.
+
+    Returns:
+    list of tuples: Each tuple contains two numbers forming a pair and the group number.
+    """
+    # Initialize an empty list to store the pairs
+    pairs = []
+    
+    # Use enumerate to keep track of the group number, starting at 0
+    for group_num, start in enumerate(range(0, num, 3), start=1):
+        # Define the current group of three numbers
+        group = range(start, start + 3)
+        
+        # Generate all unique pairs within the group
+        for pair in combinations(group, 2):
+            # Check if the second number in the pair does not exceed 'num'
+            if pair[1] <= num:
+                # Append the pair along with the group number to the list
+                pairs.append((*pair, group_num))
+    
+    return pairs
 
 def parse_filename(filename):
     
@@ -54,19 +103,36 @@ def separate_attacks(df):
     
     return attacks
 
-def process_attack_traces(directory):
+def process_attack_traces(directory, filter_func=lambda x: True):
+    """
+    Processes attack traces from files in a specified directory.
+
+    This function reads CSV files from the given directory and filters them using
+    the provided lambda function
+    
+    Then, it groups files based on a common base name, combines their data, and 
+    separates the combined data into individual attacks.
+
+    Parameters:
+    directory (str): The path to the directory containing the attack trace files.
+    filter_func (function): A lambda function to filter the files in the directory.
+                            The function should take a filename as input and return
+                            True if the file should be processed, and False otherwise.
+
+    Returns:
+    all_attacks: A list of dictionaries, each containing metadata and data for an individual attack.
+    """
     all_attacks = []
     file_groups = {}
     
     for filename in os.listdir(directory):
-        if "annotated" in filename or "DocumentMutator" in filename:
+        if not filter_func(filename):
             continue
-        if 'results' in filename:
-            base_name = '_'.join(filename.split('_part')[0].split('_')[:-1])
-            # log.info(f"Base Name: {base_name}")
-            if base_name not in file_groups:
-                file_groups[base_name] = []
-            file_groups[base_name].append(filename)
+        base_name = '_'.join(filename.split('_part')[0].split('_')[:-1])
+        # log.info(f"Base Name: {base_name}")
+        if base_name not in file_groups:
+            file_groups[base_name] = []
+        file_groups[base_name].append(filename)
 
     for base_name, files in file_groups.items():
         combined_df = pd.DataFrame()
@@ -94,6 +160,3 @@ def process_attack_traces(directory):
             })
     
     return all_attacks
-
-# Call the function and store the parsed attacks
-all_attacks = process_attack_traces(attack_trace_dir)
