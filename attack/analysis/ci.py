@@ -4,9 +4,6 @@ import scipy.stats as st
 
 from attack.utils import load_all_csvs
 
-# ------------------------------------------------------------------------
-# Custom function that returns the "ideal" max steps for a mutator
-# ------------------------------------------------------------------------
 def num_steps(mutator):
     if "Document" in mutator:
         return 100
@@ -16,8 +13,6 @@ def num_steps(mutator):
         return 250
     if "Sentence" in mutator:
         return 150
-    # Fallback; adapt as needed
-    return 100
 
 # ------------------------------------------------------------------------
 # 1) Define functions for confidence intervals
@@ -62,6 +57,8 @@ def bootstrap_conf_interval(data, confidence=0.95, n_boot=10_000, random_state=N
 # ------------------------------------------------------------------------
 
 if __name__ == "__main__":
+
+    # python -m attack.analysis.ci
 
     watermark_types = [
         "Adaptive",
