@@ -6,25 +6,20 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from collections import defaultdict
+from scipy.optimize import curve_fit
+from attack.utils import load_all_csvs
 
 mutators = ["Document1StepMutator", "Document2StepMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
-watermarks = ["GPT4o_unwatermarked", "Adaptive", "KGW", "EXP"]
+watermarks = ["GPT4o_unwatermarked", "Adaptive", "KGW", "SIR"]
 watermark_thresholds = {
-    "GPT4o_unwatermarked", 
-    "Llama-3.1_unwatermarked", 
-    "Adaptive", 
-    "KGW", 
-    "EXP"
+    "Adaptive" : 60,
+    "KGW" : .25,
+    "SIR": .25,
 }
-annotated_watermarks = ["KGW", "Adaptive"]
+annotated_watermarks = ["KGW", "Adaptive", "SIR"]
 quality_watermarks = ["KGW", "GPT4o_unwatermarked"]
 
 
-# How to split across mutator, watermark scheme, and entropy:
-# Watermark scheme: 4 different options. Should probably create separate plots for each
-# Mutator: 6 different mutators. Use different markers or linestyles?
-#   circle, down triangle, square, plus, diamond, cross
-mutator_markers = ["s", "D", "X", "o", "^", "p"]
 # https://matplotlib.org/stable/gallery/lines_bars_and_markers/marker_reference.html
 # Entropy: ranges 1-10. Use a color range?
 entropy_colors = cm.plasma(np.linspace(0,1,10))
@@ -41,49 +36,41 @@ def plot_sliding_window_success_rates():
 
         for idm, mutator in enumerate(mutators):
             print(f"\tPlotting for {mutator}")
-            traces = sorted(glob.glob(f"./attack/traces/?*{watermarker}_{mutator}?*"))
             
-            if "Document" in mutator:
-                window_size = 10
-            if "Word" in mutator:
-                window_size = 100
-            if "Span" in mutator:
-                window_size = 25
-            if "Sentence" in mutator:
-                window_size = 15
-            
-            final_data = [pd.DataFrame(columns=["step_num", "quality_preserved"]) for e in range(1,11)]
-            num_traces_per_entropy = [0] * 10
-
-            for trace in traces:
-                trace_df = pd.read_csv(trace)
-                # NOTE: This will contain trace data for multiple attack runs, and not necessarily from step 0/-1!!!!
-                for prompt, group in trace_df.groupby('prompt'):
-                    # Thank ChatGPT for this genius idea 
-                    group['trace_num'] = (group['step_num'] == -1).cumsum()
-
-                    for run_num, attack in group.groupby('trace_num'):
-                        attack["quality_preserved"] = attack["quality_preserved"].rolling(window=window_size, min_periods=1).mean()
-                        entropy = prompt_to_entropy(prompt)
-                        color = entropy_colors[entropy-1]
-
-                        final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", "quality_preserved"]]]).groupby("step_num", as_index=False).sum()
-                        #axs[idm].plot(attack["step_num"], attack["quality_preserved"], alpha=.8, color=color)
-                        num_traces_per_entropy[entropy-1] += 1
-                        
-            for i, entropy_df in enumerate(final_data):
-                color = entropy_colors[i]
-                axs[idm].plot(entropy_df["step_num"], entropy_df["quality_preserved"]/num_traces_per_entropy[i], alpha=.8, color=color)
+            window_size = num_steps(mutator)//10
 
             axs[idm].set_xlabel("Step Number")
             axs[idm].set_ylabel(f"Rolling Success Rate (window size = {window_size})")
             axs[idm].set_ylim(-.05, 1.05)
             axs[idm].set_title(mutator)
 
-            # TODO: set legend for colors 
+            # set legend for colors 
             sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
             cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
             cbar.set_label('Entropy Level')
+            
+            final_data = [pd.DataFrame(columns=["step_num", "quality_preserved"]) for e in range(1,11)]
+            num_traces_per_entropy = [0] * 10
+
+            trace_df = load_all_csvs("./attack/traces", watermarker, mutator, annotated=False)
+            if trace_df.empty:
+                print(f"\t\tEmpty dataframe! Skipping {watermarker}, {mutator}")
+                continue
+            trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            for run_num, attack in trace_df.groupby('trace_num'):
+                attack["quality_preserved"] = attack["quality_preserved"].rolling(window=window_size, min_periods=1).mean()
+                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
+                color = entropy_colors[entropy-1]
+
+                final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", "quality_preserved"]]]).groupby("step_num", as_index=False).sum()
+                num_traces_per_entropy[entropy-1] += 1
+
+                        
+            for i, entropy_df in enumerate(final_data):
+                color = entropy_colors[i]
+                axs[idm].plot(entropy_df["step_num"], entropy_df["quality_preserved"]/num_traces_per_entropy[i], alpha=.8, color=color)
+
         
         plt.savefig(f"./attack/analysis/figs/rolling_success_{watermarker}.png")
 
@@ -172,62 +159,201 @@ def plot_estimated_watermark_breaking():
 
     for idx, watermarker in enumerate(annotated_watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 3, figsize=(30, 18))
+        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
         axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
             print(f"\tPlotting for {mutator}")
-            traces = sorted(glob.glob(f"./attack/traces/?*{watermarker}_{mutator}?*_annotated?*"))
             
-            trace_num_from_prompt = defaultdict(int)
-            initial_quality = {}
+            all_data = pd.DataFrame(columns=["step_num", "watermark_score"])
+            final_data = [pd.DataFrame(columns=["step_num", "watermark_score"]) for e in range(1,11)]
+            step_num_count_per_entropy = [defaultdict(int) for i in range(10)]
+            # for each entropy: a dictionary for the number of instances of each step
+            # this is because there's an error in the adaptive traces where the number of instances of each
+            # step size is not uniform. We don't even watermark most rows, but the number
+            num_traces_per_entropy = [0] * 10
 
-            for trace in traces:
-                trace_df = pd.read_csv(trace)
-
-                if "watermark_score" not in trace_df.columns:
-                    print(f"Skipping {trace}")
-                    continue
-
-                trace_df = trace_df[["step_num", "prompt", "watermark_score", "quality_preserved"]]
-                trace_df = trace_df[trace_df["quality_preserved"] == True]
-                if "Adaptive" in trace:
-                    trace_df = trace_df[trace_df["watermark_score"] != 0]
-
-                # NOTE: This will contain trace data for multiple attack runs, and not necessarily from step 0/-1!!!!
-                for prompt, group in trace_df.groupby('prompt'):
-                    group['trace_num'] = (group['step_num'] == -1).cumsum()
-
-                    for run_num, attack in group.groupby('trace_num'):
-                        if attack["step_num"].min() == -1:
-                            trace_num_from_prompt[prompt] += 1
-                        trace_num = trace_num_from_prompt[prompt]
-
-                        entropy = prompt_to_entropy(prompt)
-                        color = entropy_colors[entropy-1]
-                        key = (prompt, trace_num)
-
-                        initial = attack[attack["step_num"] == -1]
-                        if len(initial) != 0:
-                            initial_quality[key] = initial["watermark_score"].iloc[0]
-
-                        axs[idm].plot(attack["step_num"], attack["watermark_score"], alpha=.8, color=color, label=(prompt+str(entropy)+str(trace_num)))
-                        
             axs[idm].set_xlabel("Step Number")
-            if "Adaptive" in trace:
+            if "Adaptive" in watermarker:
                 axs[idm].set_ylabel(f"Adaptive Score")
             else:
                 axs[idm].set_ylabel(f"Z-score")
             axs[idm].set_title(mutator)
 
-            # TODO: set legend for colors 
             sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
             cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
             cbar.set_label('Entropy Level')
         
-        plt.savefig(f"./attack/analysis/figs/watermark_{watermarker}.png")
+            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
 
+            if "watermark_score" not in trace_df.columns:
+                print(f"\t\tNo watermark scores! Skipping {watermarker}, {mutator}")
+                continue
+            if "Adaptive" in watermarker:
+                trace_df = trace_df[trace_df["watermark_score"] != 0]
+
+            trace_df = trace_df[["step_num", "prompt", "watermark_score", "quality_preserved"]]
+            if "Adaptive" not in watermarker:
+                trace_df = trace_df[trace_df["quality_preserved"] == True]
+            trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            for run_num, attack in trace_df.groupby('trace_num'):
+                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
+
+                if "Adaptive" in watermarker:
+                    stride = num_steps(mutator)//10
+
+                    def round_stride(x):
+                        if x == stride*10:
+                            return x
+                        if x % stride < stride // 2:
+                            return (x // stride) * stride - 1 
+                        else:
+                            return (x // stride + 1) * stride - 1
+
+                    attack["step_num"] = attack["step_num"].apply(round_stride)
+                    
+                    for idx, step in attack.iterrows():
+                        step_num_count_per_entropy[entropy-1][step["step_num"]] += 1 
+
+                else:
+                    num_traces_per_entropy[entropy-1] += 1
+                
+                final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", "watermark_score"]]]).groupby("step_num", as_index=False).sum()
+                all_data = pd.concat([all_data, attack[["step_num", "watermark_score"]]])
+                    
+            for i, entropy_df in enumerate(final_data):
+                color = entropy_colors[i]
+
+                if "Adaptive" in watermarker:
+                    entropy_df["watermark_score"] = entropy_df.apply(
+                        lambda row: row["watermark_score"] / step_num_count_per_entropy[i][row["step_num"]],
+                        axis=1)
+                    axs[idm].plot(entropy_df["step_num"], entropy_df["watermark_score"], alpha=.8, color=color)
+                else:
+                    entropy_df["watermark_score"] = entropy_df["watermark_score"]/num_traces_per_entropy[i]
+                    entropy_df["watermark_score"] = entropy_df["watermark_score"].rolling(window=num_steps(mutator), min_periods=1).mean()
+                    axs[idm].plot(entropy_df["step_num"], entropy_df["watermark_score"], alpha=.8, color=color)
+            
+            # rough estimates
+            if "Adaptive" in watermarker:
+                initial_point = 40 
+                final_point = 20 
+                func = exponential50
+                threshold = watermark_thresholds[watermarker]-50
+            else:
+                initial_point = 4
+                final_point = 2
+                func = exponential
+                threshold = watermark_thresholds[watermarker]
+
+            params, cov = curve_fit(func, 
+                all_data["step_num"].to_numpy(), all_data["watermark_score"].to_numpy(),
+                p0=[initial_point, 100],
+                )
+            
+            crossing_point = np.log(params[0]/threshold) * params[1]
+            print(f"\t\t{crossing_point} steps to {threshold}")
+            print(f"\t\t{params}")
+
+            x = np.linspace(0, num_steps(mutator), num_steps(mutator)//10)
+            y = func(x, params[0], params[1])
+
+            axs[idm].plot(x, y, linewidth=3, linestyle="dotted", 
+                label=f"Est. steps to break ({threshold + (50 if 'Adaptive' in watermarker else 0)}): {int(crossing_point)} steps")
+            axs[idm].legend()
+            if "Adaptive" in watermarker:
+                axs[idm].set_ylim(45, 105)
+            else:
+                axs[idm].set_ylim(bottom=-1)
+
+            
+        plt.savefig(f"./attack/analysis/figs/estimated_breaking_{watermarker}.png")
+
+
+
+def sanity_checks(metric):
+    # dimensions to consider: watermark type, mutator, entropy level
+
+    for idx, watermarker in enumerate(watermarks):
+        print(f"Plotting {watermarker}")
+        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
+        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        plt.suptitle(watermarker)
+
+        for idm, mutator in enumerate(mutators):
+            print(f"\tPlotting for {mutator}")
+
+            axs[idm].set_xlabel("Step Number")
+            axs[idm].set_title(mutator)
+
+            # set legend for colors 
+            sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
+            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
+            cbar.set_label('Entropy Level')
+            
+
+            trace_df = load_all_csvs("./attack/traces", watermarker, mutator, annotated=False)
+            if metric not in trace_df.columns:
+                print(f"\t\tDataframe missing {metric}! Skipping {watermarker}, {mutator}")
+                continue
+            trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            for run_num, attack in trace_df.groupby('trace_num'):
+                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
+                color = entropy_colors[entropy-1]
+                axs[idm].plot(attack["step_num"], attack[metric], alpha=.8, color=color)
+
+        
+        plt.savefig(f"./attack/analysis/figs/sanity_checks/{metric}_{watermarker}.png")
+
+def sanity_checks_rolling(metric):
+    for idx, watermarker in enumerate(watermarks):
+        print(f"Plotting {watermarker}")
+        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
+        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        plt.suptitle(watermarker)
+
+        for idm, mutator in enumerate(mutators):
+            print(f"\tPlotting for {mutator}")
+            
+            final_data = [pd.DataFrame(columns=["step_num", metric]) for e in range(1,11)]
+            num_traces_per_entropy = [0] * 10
+
+            axs[idm].set_xlabel("Step Number")
+            axs[idm].set_ylabel(metric)
+            axs[idm].set_title(mutator)
+
+            sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
+            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
+            cbar.set_label('Entropy Level')
+        
+            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
+
+            if metric not in trace_df.columns:
+                print(f"\t\tMissing {metric}! Skipping {watermarker}, {mutator}")
+                continue
+
+            trace_df = trace_df[["step_num", "prompt", "quality_preserved", metric]]
+            trace_df = trace_df[trace_df["quality_preserved"] == True]
+            trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            for run_num, attack in trace_df.groupby('trace_num'):
+                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
+
+                num_traces_per_entropy[entropy-1] += 1
+                
+                final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", metric]]]).groupby("step_num", as_index=False).sum()
+                    
+            for i, entropy_df in enumerate(final_data):
+                color = entropy_colors[i]
+
+                entropy_df[metric] = entropy_df[metric].rolling(window=num_steps(mutator), min_periods=1).mean()
+                axs[idm].plot(entropy_df["step_num"], entropy_df[metric]/num_traces_per_entropy[i], alpha=.8, color=color)
+           
+            
+        plt.savefig(f"./attack/analysis/figs/sanity_checks/rolling_{metric}_{watermarker}.png")
 
 def prompt_to_entropy(prompt):
     if "story" in prompt:
@@ -302,7 +428,26 @@ def row_to_entropy(row):
             case 566: return 9
             case 664: return 10
 
+
+def num_steps(mutator):
+    if "Document" in mutator:
+        return 100
+    if "Word" in mutator:
+        return 1000
+    if "Span" in mutator:
+        return 250
+    if "Sentence" in mutator:
+        return 150
+
+
+def exponential(x, a, b):
+    return a * np.e**(x / (-b))
+def exponential50(x, a, b):
+    return a * np.e**(x / (-b)) + 50
+
+
 if __name__ ==  "__main__":
     # plot_sliding_window_success_rates()
-    plot_quality_degredation_vs_zscore()
+    # plot_quality_degredation_vs_zscore()
     plot_estimated_watermark_breaking()
+    # sanity_checks_rolling("nicolai_quality")

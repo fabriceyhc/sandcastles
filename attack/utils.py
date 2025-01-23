@@ -338,7 +338,7 @@ def load_all_csvs(base_dir="./attack/traces", watermark_type="Adaptive", mutator
     else:
         return pd.DataFrame()
     
-def load_all_csvs(base_dir, watermark_str, mutator_str):
+def load_all_csvs(base_dir, watermark_str, mutator_str, annotated=True):
     """
     Searches anywhere in the filename for the given `mutator_str`
     (e.g. "WordMutator", "SentenceMutator", etc.) and loads all
@@ -354,7 +354,8 @@ def load_all_csvs(base_dir, watermark_str, mutator_str):
 
     # Build a glob pattern that matches anything containing the mutator_str,
     # followed by anything, and ending with .csv
-    pattern = os.path.join(base_dir, f"*?*{watermark_str}_{mutator_str}?*annotated?*")
+    file_paths = f"*?*{watermark_str}_{mutator_str}?*" + ("annotated?*" if annotated else "")
+    pattern = os.path.join(base_dir, file_paths)
 
     # Get all matching CSV files
     csv_files = glob.glob(pattern)
