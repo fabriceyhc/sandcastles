@@ -5,8 +5,6 @@ import json
 import datetime
 import textwrap
 import string
-import glob
-# from openai import OpenAI
 import difflib
 import glob
 
