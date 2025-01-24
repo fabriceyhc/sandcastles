@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 from itertools import combinations
+from dotenv import load_dotenv, find_dotenv
+from guidance import models
 
 def extract_unique_column_value(df, column_name):
     """
@@ -57,6 +59,31 @@ def get_id_tuples(num=10):
                 pairs.append((*pair, group_num))
     
     return pairs
+
+def extract_unique_column_value(df, column_name):
+    """
+    Checks if all values in the specified column are identical.
+    If so, returns that value. Otherwise, raises an Exception.
+    
+    Parameters:
+    - df (pd.DataFrame): The DataFrame to check.
+    - column_name (str): The column to verify.
+    
+    Returns:
+    - The unique value in the column.
+    
+    Raises:
+    - Exception: If the column contains multiple unique values.
+    """
+    if column_name not in df.columns:
+        raise ValueError(f"Column '{column_name}' does not exist in the DataFrame.")
+    
+    unique_count = df[column_name].nunique()
+    if unique_count == 1:
+        return df[column_name].iloc[0]
+    else:
+        unique_values = df[column_name].unique()
+        raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
 
 def parse_filename(filename):
     
@@ -160,3 +187,35 @@ def process_attack_traces(directory, filter_func=lambda x: True):
             })
     
     return all_attacks
+
+def get_model(model_name):
+    distinguisher_persona = \
+    """
+    You are an expert in analyzing the similarity of responses.
+    You specialize in detecting whether one response has been derived from another by carefully analyzing the content and structure of the text.
+    Your expertise in linguistic analysis allows you to distinguish which responses are the most closely related.
+    Your goal is to provide a clear, concise, and accurate assessment of the provided instructions.
+    # """
+
+    if("llama" in model_name):
+        match model_name:
+            case "llama3.1-8B":
+                model = "/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf"
+            case "llama3.1-70B":
+                model = "/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-q8_0.gguf"
+            case "llama3.3-70B":
+                model = "/data2/.shared_models/llama.cpp_models/Llama-3.3-70B-Instruct.Q8_0.gguf"
+            case _:
+                raise ValueError(f"Model {model_name} not found")
+
+        llm = models.LlamaCpp(
+            model=model,
+            echo=False,
+            n_gpu_layers=-1,
+            n_ctx=4096
+        )
+    elif("gpt" in model_name):
+        load_dotenv(find_dotenv())
+        llm = models.OpenAI(model_name)
+
+    return llm, distinguisher_persona

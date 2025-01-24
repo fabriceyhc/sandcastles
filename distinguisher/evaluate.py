@@ -1,12 +1,10 @@
 # ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
 
-from guidance import models
 from distinguisher.models import (SimpleDistinguisher, AggressiveSimple, SimpleGPT, SimplestGPT, LogicGPT, LogicSimple, LogicSimplest)
-from distinguisher.utils import process_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe
+from distinguisher.utils import process_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe, get_model, parse_filename
 import pandas as pd
 import os
 import datasets
-from dotenv import load_dotenv, find_dotenv
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +61,9 @@ def distinguish_attacks(sd, df, length_of_df, prefix):
     o_str = extract_unique_column_value(df, "o_str")
     m_str = extract_unique_column_value(df, "m_str")
     w_str = extract_unique_column_value(df, "w_str")
+    subsample = 50
+    if m_str == "WordMutator":
+        subsample *= 10
     prompt_type = extract_unique_column_value(df, "prompt_type")
     ids = get_id_tuples(length_of_df)
 
@@ -72,18 +73,22 @@ def distinguish_attacks(sd, df, length_of_df, prefix):
     log.info(f"Mutator: {m_str}")
     log.info(f"Watermarker: {w_str}")
     log.info(f"Prompt Type: {prompt_type}")
+    log.info(f"Distinguisher: {sd.__class__.__name__}")
 
     if os.path.isfile(output_path):
         log.info(f"Path {output_path} already exists, returning...")
         return
 
+    distinguish_count = 0
+
     for i, (attack1_id, attack2_id, entropy) in enumerate(ids):
-        log.info(f"Processing attack pair {i+1}/{len(ids)}")
         origins = {
             'A': AttackParser(None, df.iloc[attack1_id]['attack_data']),
             'B': AttackParser(None, df.iloc[attack2_id]['attack_data'])
         }
-        sd.set_origin(origins['A'].get_response(), origins['B'].get_response())
+        if sd is not None:
+            sd.set_origin(origins['A'].get_response(), origins['B'].get_response())
+            log.info(f"Processing attack pair {i+1}/{len(ids)}")
         for origin, attack in origins.items():
             dataset = []
             for n in range(len(attack)):
@@ -92,13 +97,17 @@ def distinguish_attacks(sd, df, length_of_df, prefix):
                     "Num": n,
                     "Origin": origin,
                 })
-            # TODO: Remove this line when running on full dataset
-            dataset = dataset[-5:]
+            # dataset = dataset[-5:] # TODO: Remove this line when running on full dataset
+            dataset = dataset[::subsample]
+
+            if sd is None:
+                distinguish_count += len(dataset)
+                continue
+            log.info(f"Counter: {distinguish_count}")
+            distinguish_count += len(dataset)
             dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
             dataset = sd.distinguish(dataset).to_pandas()
             dataset["prompt"] = attack.get_prompt()
-            dataset["origin_A"] = origins['A'].get_response()
-            dataset["origin_B"] = origins['B'].get_response()
             dataset["o_str"] = o_str
             dataset["w_str"] = w_str
             dataset["m_str"] = m_str
@@ -106,66 +115,33 @@ def distinguish_attacks(sd, df, length_of_df, prefix):
             dataset["entropy"] = entropy
             dataset["attack1_id"] = attack1_id
             dataset["attack2_id"] = attack2_id
+            dataset["origin_A"] = ""
+            dataset["origin_B"] = ""
+            dataset.iloc[0, dataset.columns.get_loc("origin_A")] = origins['A'].get_response()
+            dataset.iloc[0, dataset.columns.get_loc("origin_B")] = origins['B'].get_response()
             dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
+    log.info(f"Finished Counter: {distinguish_count}")
+    return distinguish_count
 
-def main():
-    # Directory containing attack traces
-    attack_trace_dir = "attack/traces/"
-
-    # Filter to parse only files that evaluate as True
-    filter_func = lambda x: "distinguisher" in x
-
-    all_attacks = process_attack_traces(attack_trace_dir, filter_func)
-
-    # TODO: Use the lambda function to filter the attacks
-    # Reading all the traces then filtering takes unnecessarily long and too much RAM
-
-    df = pd.DataFrame(all_attacks)
-
-    distinguisher_persona = \
-    """
-    You are an expert in analyzing the similarity of responses.
-    You specialize in detecting whether one response has been derived from another by carefully analyzing the content and structure of the text.
-    Your expertise in linguistic analysis allows you to distinguish which responses are the most closely related.
-    Your goal is to provide a clear, concise, and accurate assessment of the provided instructions.
-    # """
-
-    llm = models.LlamaCpp(
-        # model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-8B-Instruct-q8_0.gguf",
-        model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-q8_0.gguf",
-        # model="/data2/.shared_models/llama.cpp_models/Llama-3.3-70B-Instruct-GGUF/Llama-3.3-70B-Instruct.Q8_0.gguf-00001-of-00006.gguf",
-        echo=False,
-        n_gpu_layers=-1,
-        n_ctx=4096
-    )
-
-    # load_dotenv(find_dotenv())
-    # chatgpt = models.OpenAI("gpt-4o-mini")
-
-    length_of_df = 30
-    # sd = AggressiveSimple(llm, distinguisher_persona, None, None)
-    # sd = ReasoningDistinguisher(llm, distinguisher_persona, None, None)
-    # sd = SimpleGPT(llm, distinguisher_persona, None, None)
-    # sd = SimplestGPT(llm, distinguisher_persona, None, None)
-    # sd = SimplestGPT(chatgpt, None, None, None)
-
+# Need to adjust for different datasets
+def split_to_parts(df, length_of_df):
     unique_values = df['m_str'].unique()
     dfs_by_m_str = {value: df[df['m_str'] == value].copy() for value in unique_values}
-
-    # log.info(f"DFs by m_str: {dfs_by_m_str}")
 
     further_split_dfs = {}
     for key, dataframe in dfs_by_m_str.items():
         split_dfs = split_dataframe(dataframe, length_of_df)
 
         # Add "prompt_type" column to each split
-        split_dfs[0]['prompt_type'] = 'test'
+        split_dfs[0]['prompt_type'] = 'paris'
+        split_dfs[1]['prompt_type'] = 'space'
+        split_dfs[2]['prompt_type'] = 'news'
 
         further_split_dfs[key] = {
             f'{key}_part1': split_dfs[0],
+            f'{key}_part2': split_dfs[1],
+            f'{key}_part3': split_dfs[2]
         }
-
-    # log.info(f"Further split: {further_split_dfs}")
 
     # Verify each further split has length_of_df rows and order is preserved
     for _, splits in further_split_dfs.items():
@@ -173,12 +149,49 @@ def main():
             assert len(part_df) == length_of_df, f"{part_key} does not have {length_of_df} rows."
 
     parts = [part for splits in further_split_dfs.values() for part in splits.values()]
+    return parts
+
+def main():
+    # Directory containing attack traces
+    attack_trace_dir = "/data2/borito1907/sandcastles/attack/traces/"
+
+    # Filter to parse only files that evaluate as True
+    def filter_func(filename):
+        if not filename.endswith(".csv"):
+            return False
+        if "annotated" in filename:
+            return False
+        o_str, w_str, m_str, n_steps = parse_filename(filename)
+        # return w_str in ["GPT4o_unwatermarked", "KGW", "Adaptive"] and m_str in ["WordMutator", "SpanMutator", "SentenceMutator"]
+        return w_str in ["GPT4o_unwatermarked"] and m_str in ["SpanMutator", "SentenceMutator"]
+
+    for filename in filter(filter_func, os.listdir(attack_trace_dir)):
+        log.info(filename)
+    
+    all_attacks = process_attack_traces(attack_trace_dir, filter_func)
+
+    # TODO: Use the lambda function to filter the attacks
+    # Reading all the traces then filtering takes unnecessarily long and too much RAM
+
+    df = pd.DataFrame(all_attacks)
+    length_of_df = 30
+    parts = split_to_parts(df, length_of_df)
     log.info(f"Number of parts: {len(parts)}")
 
-    for sd in [SimpleDistinguisher(llm, distinguisher_persona), AggressiveSimple(llm, distinguisher_persona), LogicGPT(llm, distinguisher_persona)]:
+    total_len = 0
+    for i, part in enumerate(parts):
+        log.info(f"Processing part {i+1}/{len(parts)}")
+        part_len = distinguish_attacks(None, part, length_of_df, "dryrun")
+        total_len += part_len
+        log.info(f"Part length: {part_len}\n")
+    log.info(f"Total length: {total_len}")
+        
+    llm, distinguisher_persona = get_model("llama3.3-70B")
+
+    for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
         for i, part in enumerate(parts):
             log.info(f"Processing part {i+1}/{len(parts)}")
-            distinguish_attacks(sd, part, length_of_df, "llama3.1-70B")
+            distinguish_attacks(sd, part, length_of_df, "llama3.1-8B-sample")
 
 if __name__ == "__main__":
     main()
