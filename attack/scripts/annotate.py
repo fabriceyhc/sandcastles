@@ -1,4 +1,4 @@
-# RUN: CUDA_VISIBLE_DEVICES=4,5 python -m attack.scripts.annotate
+# RUN: CUDA_VISIBLE_DEVICES=6,7 python -m attack.scripts.annotate
 
 import pandas as pd
 import re
@@ -7,7 +7,7 @@ import torch
 import logging
 import glob
 import traceback
-from extractors import FluencyMetric, GrammarMetric, EditsMetric, InternLMQualityMetric
+from extractors import FluencyMetric, GrammarMetric, EditsMetric, InternLMQualityMetric, QualityMetric
 from watermark.get_watermark import get_watermark, cleanup_resources
 from distinguisher.utils import parse_filename
 
@@ -28,10 +28,11 @@ def get_max_step_count(df):
 
 def main():
     # Initialize metric extractors
-    fluency = FluencyMetric()
-    grammar = GrammarMetric()
-    quality = InternLMQualityMetric()
-    edits   = EditsMetric()
+    # fluency = FluencyMetric()
+    # grammar = GrammarMetric()
+    # quality = InternLMQualityMetric()
+    # edits   = EditsMetric()
+    nicolai_quality = QualityMetric(model_id="nicolinho/QRM-Llama3.1-8B-v2")
 
     traces = glob.glob(f"./attack/traces/*.csv")
 
@@ -46,12 +47,6 @@ def main():
         log.info(f"Mutator: {m}")
         log.info(f"Steps: {s}")
 
-
-        if "InternLMOracle_KGW_Document1StepMutator_n-steps=100_attack_results_annotated.csv" in trace:
-            print("Nice.")
-        else:
-            continue
- 
         output_file = trace
 
         if "annotated" not in output_file:
@@ -72,29 +67,35 @@ def main():
         df["current_text"] = df["current_text"].fillna(df["mutated_text"])
 
         # step_num,mutation_num,prompt,current_text,mutated_text,current_text_len,mutated_text_len,length_issue,quality_analysis,quality_preserved,watermark_detected,watermark_score,backtrack,total_time,mutator_time,oracle_time
-        if "words_edited" not in df.columns:
+        # if "words_edited" not in df.columns:
+        #     try:
+        #         df = edits.evaluate_dataframe(df, current_text_column="current_text", mutated_text_column="mutated_text", new_column="words_edited")
+        #     except:
+        #         print(f"{'=' * 50} words_edited {'=' * 50}")
+        #         print(traceback.format_exc())
+        # if "perplexity" not in df.columns:
+        #     try:
+        #         df = fluency.evaluate_dataframe(df, text_column="mutated_text", new_column="perplexity")
+        #     except:
+        #         print(f"{'=' * 50} perplexity {'=' * 50}")
+        #         print(traceback.format_exc())
+        # if "grammar_errors" not in df.columns:    
+        #     try:
+        #         df = grammar.evaluate_dataframe(df, text_column="mutated_text", new_column="grammar_errors")
+        #     except:
+        #         print(f"{'=' * 50} grammar_errors {'=' * 50}")
+        #         print(traceback.format_exc())
+        # if "internlm_quality" not in df.columns:
+        #     try:
+        #         df = quality.evaluate_dataframe(df, prompt_column="prompt", text_column="mutated_text", new_column="internlm_quality")
+        #     except:
+        #         print(f"{'=' * 50} internlm_quality {'=' * 50}")
+        #         print(traceback.format_exc()) 
+        if "nicolai_quality" not in df.columns:
             try:
-                df = edits.evaluate_dataframe(df, current_text_column="current_text", mutated_text_column="mutated_text", new_column="words_edited")
+                df = nicolai_quality.evaluate_dataframe(df, prompt_column="prompt", text_column="mutated_text", new_column="nicolai_quality")
             except:
-                print(f"{'=' * 50} words_edited {'=' * 50}")
-                print(traceback.format_exc())
-        if "perplexity" not in df.columns:
-            try:
-                df = fluency.evaluate_dataframe(df, text_column="mutated_text", new_column="perplexity")
-            except:
-                print(f"{'=' * 50} perplexity {'=' * 50}")
-                print(traceback.format_exc())
-        if "grammar_errors" not in df.columns:    
-            try:
-                df = grammar.evaluate_dataframe(df, text_column="mutated_text", new_column="grammar_errors")
-            except:
-                print(f"{'=' * 50} grammar_errors {'=' * 50}")
-                print(traceback.format_exc())
-        if "internlm_quality" not in df.columns:
-            try:
-                df = quality.evaluate_dataframe(df, prompt_column="prompt", text_column="mutated_text", new_column="internlm_quality")
-            except:
-                print(f"{'=' * 50} internlm_quality {'=' * 50}")
+                print(f"{'=' * 50} nicolai_quality {'=' * 50}")
                 print(traceback.format_exc()) 
         
         log.info(df)
