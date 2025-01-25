@@ -4,6 +4,7 @@ import torch
 from transformers import AutoModel, AutoTokenizer, pipeline
 from attack.oracles.base import ResponseQuality
 from attack.oracles.utils import add_prefix_to_keys
+from attack.oracles.rewardbench._base import BaseRewardBenchOracle
 
 from typing import Dict, List
 import torch
@@ -54,32 +55,27 @@ class OffsetBiasPipeline:
             score = self.pipe(input_texts, **self.pipe_kwargs)[0]["score"]
         return score
 
-class OffsetBiasOracle:
+class OffsetBiasOracle(BaseRewardBenchOracle):
     
     def __init__(self, model=None, explain=False) -> None:
         if model is None:
             self.model = OffsetBiasPipeline()
         self.similarity_threshold = 0.7130681818181819
 
+    def _score_example(self, prompt, text):
+        chat = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": text}
+        ]
+        score = self.model(chat)
+        return score
+
     def evaluate(self, instruction, response_A, response_B, explain=False, **kwargs):
-        chat_A = [
-            {"role": "user", "content": instruction},
-            {"role": "assistant", "content": response_A}
-        ]
-        chat_B = [
-            {"role": "user", "content": instruction},
-            {"role": "assistant", "content": response_B}
-        ]
-        
-        # Get scores for both chats
-        score_A = self.model(chat_A)
-        score_B = self.model(chat_B)
-        
-        # Return output
         return {
-            "score_A": score_A,
-            "score_B": score_B,
+            "score_A": self._score_example(instruction, response_A),
+            "score_B": self._score_example(instruction, response_B),
         }
+    
     
     def extract_label(self, evaluation):
         score_A, score_B = evaluation["score_A"], evaluation["score_B"]
@@ -152,24 +148,14 @@ class OffsetBiasOracle:
 # Testing
 if __name__ == "__main__":
 
-    import pandas as pd
     import time
-    import warnings
-
-    warnings.filterwarnings("error")
 
     def test():
 
-        from guidance import models        
-
-        # Load sample data row
-        dataset = pd.read_csv("./data/WQE/dev.csv")
-        dataset = dataset.sample(frac=1).reset_index(drop=True)
-        dataset = dataset[dataset["winner_tie"] == 0].head(1) 
-        instruction = dataset["prompt"].iloc[0]
-        original_text = dataset["response_a"].iloc[0]
-        mutated_text = dataset["response_b"].iloc[0]
-        label = ResponseQuality.TIE if dataset["winner_tie"].iloc[0] else ResponseQuality.A_BETTER if dataset["winner_model_a"].iloc[0] else ResponseQuality.B_BETTER
+        instruction = "In what country is Berlin?"
+        original_text = "Berlin is in Germany."
+        mutated_text = "Berlin is in Hungary."
+        label = ResponseQuality.A_BETTER
 
         oracle = OffsetBiasOracle()
 

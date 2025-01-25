@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from transformers import LlamaPreTrainedModel, LlamaModel, PreTrainedTokenizerFast
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
+from attack.oracles.base import ResponseQuality
+from attack.oracles.rewardbench._base import BaseRewardBenchOracle
 
 class INFORMForSequenceClassification(LlamaPreTrainedModel):
     def __init__(self, config):
@@ -72,13 +74,13 @@ class INFORMForSequenceClassification(LlamaPreTrainedModel):
         )
 
 
-class INFORMOracle:
+class INFORMOracle(BaseRewardBenchOracle):
 
     def __init__(
         self,
         model_name: str = "infly/INF-ORM-Llama3.1-70B",
         explain: bool = False,
-        similarity_threshold: float = 0.4615293560606061,
+        similarity_threshold: float = 0.4615293560606061, # TODO: find this number
         **model_kwargs
     ) -> None:
         """
@@ -96,6 +98,7 @@ class INFORMOracle:
         # Make sure that INFORMForSequenceClassification is visible to this module or import path is correct
         self.model = INFORMForSequenceClassification.from_pretrained(
             model_name,
+            cache_dir="/data2/.shared_models/",
             torch_dtype=torch.bfloat16,       # or torch.float16, depending on your GPU
             device_map="auto",                # or "cuda" if you want to specify a single device
             attn_implementation="flash_attention_2",
@@ -104,6 +107,22 @@ class INFORMOracle:
         )
         self.similarity_threshold = similarity_threshold
         print(f"INFORMOracle({model_name}) loaded to {self.device}")
+
+
+    def _score_example(self, prompt, text):
+        chat = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": text}
+        ]
+        # Tokenize using the provided `apply_chat_template` method if available
+        chat_tokenized = self.tokenizer.apply_chat_template(
+            chat, tokenize=True, return_tensors="pt"
+        ).to(self.device)
+        # Forward pass for each chat
+        with torch.no_grad():
+            output = self.model(chat_tokenized)
+        score = output.logits[0].item()
+        return score
 
     def evaluate(self, instruction, response_A, response_B, explain=False, **kwargs):
         """
@@ -116,40 +135,9 @@ class INFORMOracle:
         :param kwargs: Extra arguments (ignored here but kept for interface compatibility)
         :return: Dict with 'score_A' and 'score_B'
         """
-
-        # Construct chat-like structures
-        chat_A = [
-            {"role": "user", "content": instruction},
-            {"role": "assistant", "content": response_A},
-        ]
-        chat_B = [
-            {"role": "user", "content": instruction},
-            {"role": "assistant", "content": response_B},
-        ]
-
-        # Tokenize using the provided `apply_chat_template` method if available
-        # Otherwise, adapt to your prompt-formatting code.
-        # The code snippet you showed uses tokenizer.apply_chat_template(...).
-        chat_A_tokenized = self.tokenizer.apply_chat_template(
-            chat_A, tokenize=True, return_tensors="pt"
-        ).to(self.device)
-        chat_B_tokenized = self.tokenizer.apply_chat_template(
-            chat_B, tokenize=True, return_tensors="pt"
-        ).to(self.device)
-
-        # Forward pass for each chat
-        with torch.no_grad():
-            output_A = self.model(chat_A_tokenized)
-            output_B = self.model(chat_B_tokenized)
-        
-        # In the INFORMForSequenceClassification demo, 
-        # the reward score is at logits[0][0], since num_labels=1.
-        score_A = output_A.logits[0].item()
-        score_B = output_B.logits[0].item()
-
         return {
-            "score_A": score_A,
-            "score_B": score_B,
+            "score_A": self._score_example(instruction, response_A),
+            "score_B": self._score_example(instruction, response_B),
         }
 
     def extract_label(self, evaluation):
