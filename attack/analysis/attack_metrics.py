@@ -102,7 +102,7 @@ if __name__ == "__main__":
     watermarks = ["Adaptive", "KGW"]
 
     cutoffs = {
-        "Adaptive" : [50, 60, 70, 80, 90, 100],
+        "Adaptive" : [20, 30, 40, 50, 60, 70],
         "KGW" :  [0, 0.5, 1, 2, 3, 6]
     }
     labels = ["Average Time to Success", "Average Attack Success", "Average Steps to Success", "Average score change"]
@@ -112,7 +112,8 @@ if __name__ == "__main__":
     mutator_markers = ["s", "D", "X", "o", "^", "p"]
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        # plt.subplots_adjust(left=.1, bottom=None, right=None, top=None, wspace=.3, hspace=None)
         axsl = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
         for idm, mutator in enumerate(mutators):
             print(f"\tPlotting for {mutator}")
@@ -142,7 +143,7 @@ if __name__ == "__main__":
                 # print(cutoffs[watermarker])
                 # print(total[i])
                 axsl[i].plot(cutoffs[watermarker], total[i], marker=mutator_markers[idm], label=mutator)
-                axsl[i].set_xlabel("Watermark Detection Score Cutoff")
+                axsl[i].set_xlabel("Watermark Detection Score")
                 axsl[i].set_ylabel(labels[i])
                 axsl[i].set_title(titles[i])
                 axsl[i].legend(loc="upper right")
