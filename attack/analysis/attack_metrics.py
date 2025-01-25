@@ -102,11 +102,11 @@ if __name__ == "__main__":
     watermarks = ["Adaptive", "KGW"]
 
     cutoffs = {
-        "Adaptive" : [20, 30, 40, 50, 60, 70],
+        "Adaptive" : [50, 60, 70, 80, 90, 100],
         "KGW" :  [0, 0.5, 1, 2, 3, 6]
     }
     labels = ["Average Time to Success", "Average Attack Success", "Average Steps to Success", "Average score change"]
-    titles = ["Time to Success vs Cutoff", "Attack Success Rate vs Cutoff", "Steps to Sucess vs Cutoff", "Score change vs Cutoff"]
+    titles = ["Time to Success", "Attack Success Rate", "Steps to Sucess", "Score change"]
   
 
     mutator_markers = ["s", "D", "X", "o", "^", "p"]
@@ -140,11 +140,11 @@ if __name__ == "__main__":
             if len(total[0]) == 0:
                 continue
             for i in range(4):
-                # print(cutoffs[watermarker])
-                # print(total[i])
                 axsl[i].plot(cutoffs[watermarker], total[i], marker=mutator_markers[idm], label=mutator)
                 axsl[i].set_xlabel("Watermark Detection Score")
                 axsl[i].set_ylabel(labels[i])
                 axsl[i].set_title(titles[i])
-                axsl[i].legend(loc="upper right")
+                # Move legend outside the plot
+                axsl[i].legend(loc="upper left", bbox_to_anchor=(1.05, 1))
+        fig.subplots_adjust(right=0.8, wspace=0.8, hspace=0.3)
         fig.savefig(f"./attack/{watermarker}.png")
