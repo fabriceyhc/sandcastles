@@ -57,13 +57,16 @@ class AttackParser():
     def get_nth(self, n):
         return self.df[n]
 
-def distinguish_attacks(sd, df, length_of_df, prefix):
+def distinguish_attacks(sd, df, length_of_df, prefix, subsample=1):
     o_str = extract_unique_column_value(df, "o_str")
     m_str = extract_unique_column_value(df, "m_str")
     w_str = extract_unique_column_value(df, "w_str")
-    subsample = 50
+    if m_str == "SentenceMutator":
+        subsample *= 3
+    if m_str == "SpanMutator":
+        subsample *= 5
     if m_str == "WordMutator":
-        subsample *= 10
+        subsample *= 20
     prompt_type = extract_unique_column_value(df, "prompt_type")
     ids = get_id_tuples(length_of_df)
 
@@ -153,7 +156,7 @@ def split_to_parts(df, length_of_df):
 
 def main():
     # Directory containing attack traces
-    attack_trace_dir = "/data2/borito1907/sandcastles/attack/traces/"
+    attack_trace_dir = "attack/traces/"
 
     # Filter to parse only files that evaluate as True
     def filter_func(filename):
@@ -162,8 +165,9 @@ def main():
         if "annotated" in filename:
             return False
         o_str, w_str, m_str, n_steps = parse_filename(filename)
+        # print(filename, w_str, m_str)
         # return w_str in ["GPT4o_unwatermarked", "KGW", "Adaptive"] and m_str in ["WordMutator", "SpanMutator", "SentenceMutator"]
-        return w_str in ["GPT4o_unwatermarked"] and m_str in ["SpanMutator", "SentenceMutator"]
+        return w_str in ["Adaptive"] and m_str in ["WordMutator", "SpanMutator", "SentenceMutator"]
 
     for filename in filter(filter_func, os.listdir(attack_trace_dir)):
         log.info(filename)
@@ -181,17 +185,17 @@ def main():
     total_len = 0
     for i, part in enumerate(parts):
         log.info(f"Processing part {i+1}/{len(parts)}")
-        part_len = distinguish_attacks(None, part, length_of_df, "dryrun")
+        part_len = distinguish_attacks(None, part, length_of_df, "dryrun", 4)
         total_len += part_len
         log.info(f"Part length: {part_len}\n")
     log.info(f"Total length: {total_len}")
-        
-    llm, distinguisher_persona = get_model("llama3.3-70B")
+
+    llm, distinguisher_persona = get_model("llama3.1-70B")
 
     for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
         for i, part in enumerate(parts):
             log.info(f"Processing part {i+1}/{len(parts)}")
-            distinguish_attacks(sd, part, length_of_df, "llama3.1-8B-sample")
+            distinguish_attacks(sd, part, length_of_df, "llama3.1-70B-full", 4)
 
 if __name__ == "__main__":
     main()

@@ -219,3 +219,38 @@ def get_model(model_name):
         llm = models.OpenAI(model_name)
 
     return llm, distinguisher_persona
+
+def prompt_to_entropy(prompt):
+    if "story" in prompt:
+        if len(prompt) == 23: return 1
+        if len(prompt) == 49: return 2
+        if len(prompt) == 65: return 3
+        if len(prompt) == 98: return 4
+        if len(prompt) == 123: return 5
+        if len(prompt) == 209: return 6
+        if len(prompt) == 235: return 7
+        if len(prompt) == 263: return 8
+        if len(prompt) == 340: return 9
+        if len(prompt) == 492: return 10
+    elif "essay" in prompt:
+        if len(prompt) == 65: return 1
+        if len(prompt) == 107: return 2
+        if len(prompt) == 152: return 3
+        if len(prompt) == 194: return 4
+        if len(prompt) == 253: return 5
+        if len(prompt) == 285: return 6
+        if len(prompt) == 331: return 7
+        if len(prompt) == 341: return 8
+        if len(prompt) == 399: return 9
+        if len(prompt) == 471: return 10
+    elif "news" in prompt:
+        if len(prompt) == 30: return 1
+        if len(prompt) == 60: return 2
+        if len(prompt) == 131: return 3
+        if len(prompt) == 206: return 4
+        if len(prompt) == 272: return 5
+        if len(prompt) == 356: return 6
+        if len(prompt) == 442: return 7
+        if len(prompt) == 514: return 8
+        if len(prompt) == 566: return 9
+        if len(prompt) == 664: return 10

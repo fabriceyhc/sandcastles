@@ -4,8 +4,9 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 from attack.oracles.base import ResponseQuality
 from attack.oracles.utils import add_prefix_to_keys
+from attack.oracles.rewardbench._base import BaseRewardBenchOracle
 
-class InternLMOracle:
+class InternLMOracle(BaseRewardBenchOracle):
     
     def __init__(self, model=None, explain=False) -> None:
         self.device = torch.device("cuda"if torch.cuda.is_available() else"cpu")
@@ -21,6 +22,13 @@ class InternLMOracle:
         print(f"InternLMOracle(internlm/internlm2-20b-reward) loaded to {self.device}")
         self.similarity_threshold = 0.4615293560606061
 
+    def _score_example(self, prompt, text):
+        chat = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": text}
+        ]
+        score = self.model.get_score(self.tokenizer, chat)
+        return score 
 
     def evaluate(self, instruction, response_A, response_B, explain=False, **kwargs):
         chat_A = [
@@ -112,24 +120,16 @@ class InternLMOracle:
 # Testing
 if __name__ == "__main__":
 
-    import pandas as pd
     import time
-    import warnings
-
-    warnings.filterwarnings("error")
-
-    def test():
-
-        from guidance import models        
+    
+    def test():      
 
         # Load sample data row
-        dataset = pd.read_csv("./data/WQE/dev.csv")
-        dataset = dataset.sample(frac=1).reset_index(drop=True)
-        dataset = dataset[dataset["winner_tie"] == 0].head(1) 
-        instruction = dataset["prompt"].iloc[0]
-        original_text = dataset["response_a"].iloc[0]
-        mutated_text = dataset["response_b"].iloc[0]
-        label = ResponseQuality.TIE if dataset["winner_tie"].iloc[0] else ResponseQuality.A_BETTER if dataset["winner_model_a"].iloc[0] else ResponseQuality.B_BETTER
+
+        instruction = "In what country is Berlin?"
+        original_text = "Berlin is in Germany."
+        mutated_text = "Berlin is in Hungary."
+        label = ResponseQuality.A_BETTER
 
         oracle = InternLMOracle()
 
