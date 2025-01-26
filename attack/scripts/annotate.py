@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-# RUN: CUDA_VISIBLE_DEVICES=6,7 python -m attack.scripts.annotate
-
-=======
->>>>>>> 3f0c8be7a83fecd1c1feec63b76b111bba8c21b6
 import pandas as pd
 import re
 import os
@@ -10,9 +5,6 @@ import torch
 import logging
 import glob
 import traceback
-<<<<<<< HEAD
-from extractors import FluencyMetric, GrammarMetric, EditsMetric, InternLMQualityMetric, QualityMetric
-=======
 import shutil  # for moving files
 
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
@@ -24,7 +16,6 @@ from attack.oracles import (
     SkyworkOracle
 ) # NOTE: Weshould only annotate with the TOP 3 from our quality oracle analysis
 
->>>>>>> 3f0c8be7a83fecd1c1feec63b76b111bba8c21b6
 from watermark.get_watermark import get_watermark, cleanup_resources
 from distinguisher.utils import parse_filename
 
