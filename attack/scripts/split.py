@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     traces = glob.glob("./attack/traces/*")
 
-    traces = [trace for trace in traces if "distinguisher" in trace and "Word" in trace]
+    traces = [trace for trace in traces if "SIR" in trace]
     
     for trace in traces:
         chunk_paths = split_csv_by_approx_size(trace)

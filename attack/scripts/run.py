@@ -34,9 +34,9 @@ def main(cfg):
     mutators = [
         # EntropyWordMutator, 
         # WordMutator,
-        SpanMutator,
-        SentenceMutator,
-        Document1StepMutator,
+        # SpanMutator,
+        # SentenceMutator,
+        # Document1StepMutator,
         Document2StepMutator,
         # DocumentMutator,
     ]
