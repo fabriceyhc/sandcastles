@@ -52,7 +52,7 @@ def plot_sliding_window_success_rates():
             final_data = [pd.DataFrame(columns=["step_num", "quality_preserved"]) for e in range(1,11)]
             num_traces_per_entropy = [0] * 10
 
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator, annotated=False)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator, annotated=False)
             if trace_df.empty:
                 print(f"\t\tEmpty dataframe! Skipping {watermarker}, {mutator}")
                 continue
@@ -187,7 +187,7 @@ def plot_estimated_watermark_breaking():
             cbar.set_label('Entropy Level')
 
             # Load data
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if "watermark_score" not in trace_df.columns:
                 print(f"\t\tNo watermark scores! Skipping {watermarker}, {mutator}")
                 continue
@@ -366,7 +366,7 @@ def sanity_checks(metric):
             cbar.set_label('Entropy Level')
             
 
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator, annotated=False)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator, annotated=False)
             if metric not in trace_df.columns:
                 print(f"\t\tDataframe missing {metric}! Skipping {watermarker}, {mutator}")
                 continue
@@ -401,7 +401,7 @@ def sanity_checks_rolling(metric):
             cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
             cbar.set_label('Entropy Level')
         
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
 
             if metric not in trace_df.columns:
                 print(f"\t\tMissing {metric}! Skipping {watermarker}, {mutator}")

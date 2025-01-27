@@ -122,7 +122,7 @@ if __name__ == "__main__":
             lstep_count = []
             lscore_change = []
             total = [lmean_time, lsuccess_rate, lstep_count, lscore_change]
-            df = load_all_csvs("./attack/traces", watermarker, mutator)
+            df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if df.empty:
                 continue
             for cutoff in cutoffs[watermarker]:

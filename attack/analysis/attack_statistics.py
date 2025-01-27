@@ -31,7 +31,7 @@ def attack_statistics():
                      "avg_pre_attack_quality": 0, "avg_post_attack_quality": 0, "avg_success_rate": 0,
                      }
             
-            trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
 
             if trace_df.empty:
                 print(f"\t\tNo annotated data: Skipping {watermarker} {mutator}")
