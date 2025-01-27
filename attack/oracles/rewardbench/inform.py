@@ -5,6 +5,7 @@ import torch.nn as nn
 from transformers import LlamaPreTrainedModel, LlamaModel, PreTrainedTokenizerFast
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
 from attack.oracles.base import ResponseQuality
+from attack.oracles.utils import add_prefix_to_keys
 from attack.oracles.rewardbench._base import BaseRewardBenchOracle
 
 class INFORMForSequenceClassification(LlamaPreTrainedModel):
@@ -106,7 +107,7 @@ class INFORMOracle(BaseRewardBenchOracle):
             **model_kwargs
         )
         self.similarity_threshold = similarity_threshold
-        print(f"INFORMOracle({model_name}) loaded to {self.device}")
+        print(f"INFORMOracle({model_name}) loaded!")
 
 
     def _score_example(self, prompt, text):
@@ -237,6 +238,8 @@ class INFORMOracle(BaseRewardBenchOracle):
 
 # Testing
 if __name__ == "__main__":
+
+    # CUDA_VISIBLE_DEVICES=0,1,2,3 python -m attack.oracles.rewardbench.inform
 
     import time
 

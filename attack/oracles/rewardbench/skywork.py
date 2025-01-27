@@ -31,14 +31,13 @@ class SkyworkOracle(BaseRewardBenchOracle):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Load model
-        # For large models, consider device_map="auto" if you need multi-GPU inference.
         attn_implementation = "flash_attention_2" if use_flash_attn else None
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_path,
             cache_dir="/data2/.shared_models/",
             torch_dtype=torch.bfloat16,
             attn_implementation=attn_implementation,
-            device_map=device,
+            device_map="auto",
             trust_remote_code=True,  # QRM-Gemma uses custom code
             **model_kwargs
         )
@@ -47,7 +46,7 @@ class SkyworkOracle(BaseRewardBenchOracle):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
         
         self.similarity_threshold = similarity_threshold
-        print(f"SkyworkOracle({model_path}) loaded to {self.device}")
+        print(f"SkyworkOracle({model_path}) loaded!")
 
 
     def _score_example(self, prompt, text):
@@ -194,6 +193,8 @@ class SkyworkOracle(BaseRewardBenchOracle):
 
 # Testing
 if __name__ == "__main__":
+
+    # CUDA_VISIBLE_DEVICES=0,1,2,3 python -m attack.oracles.rewardbench.skywork
 
     import time
     
