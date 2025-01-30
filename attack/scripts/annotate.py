@@ -10,11 +10,9 @@ import shutil  # for moving files
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
     ArmoRMOracle,
-    INFORMOracle,
-    InternLMOracle,
-    QRMOracle,
-    SkyworkOracle
-) # NOTE: Weshould only annotate with the TOP 3 from our quality oracle analysis
+    OffsetBiasOracle,
+    DiffOracle
+)
 
 from watermark.get_watermark import get_watermark, cleanup_resources
 from distinguisher.utils import parse_filename
@@ -26,7 +24,7 @@ log = logging.getLogger(__name__)
 REQUIRED_COLUMNS = ["words_edited", "perplexity", "grammar_errors", "internlm_quality"] # TODO: update this with the other quality oracles when we decide which ones they are. 
 
 def assign_unique_group_ids(df):
-    df['new_group'] = (df['step_num'] == 0).astype(int)
+    df['new_group'] = (df['step_num'] == -1).astype(int)
     df['group_id'] = df['new_group'].cumsum()
     return df
 
@@ -80,13 +78,36 @@ def evaluate_column(df, column):
             del metric
             torch.cuda.empty_cache()
 
-        elif column == "internlm_quality":
-            metric = InternLMOracle()
+        elif column == "armolm_quality":
+            metric = ArmoRMOracle()
             df = metric.score_dataframe(
                 df, 
                 prompt_column="prompt", 
                 text_column="mutated_text", 
-                new_column="internlm_quality"
+                new_column="armolm_quality"
+            )
+            del metric
+            torch.cuda.empty_cache()
+
+        elif column == "offsetbias_quality":
+            metric = OffsetBiasOracle()
+            df = metric.score_dataframe(
+                df, 
+                prompt_column="prompt", 
+                text_column="mutated_text", 
+                new_column="offsetbias_quality"
+            )
+            del metric
+            torch.cuda.empty_cache()
+
+        elif column == "difforacle_quality":
+            metric = DiffOracle()
+            df = metric.score_dataframe(
+                df, 
+                prompt_column="prompt", 
+                original_text_column="current_text", 
+                mutated_text_column="mutated_text", 
+                new_column="difforacle_quality"
             )
             del metric
             torch.cuda.empty_cache()
@@ -118,7 +139,7 @@ def annotate_if_missing(df):
 
 def main():
     # Get all .csv traces in ./attack/traces/
-    traces = glob.glob("./attack/traces/*.csv")
+    traces = glob.glob("./attack/traces/*.csv") + glob.glob("./attack/traces/annotated/*.csv")
 
     for trace in traces:
         log.info(f"Trace: {trace}")

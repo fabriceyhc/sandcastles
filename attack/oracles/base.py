@@ -139,4 +139,26 @@ class Oracle(ABC):
         elif label == ResponseQuality.B_BETTER:
             return ResponseQuality.A_BETTER
         return label # TIE stays the same
+
+
+    def score_dataframe(self, df, prompt_column, original_text_column, mutated_text_column, new_column):
+        """
+        Evaluate a pandas DataFrame, adding a new column indicating if quality is preserved.
+
+        :param df: pandas DataFrame containing prompts, original texts, and mutated texts.
+        :param prompt_column: Name of the column with prompt strings.
+        :param original_text_column: Name of the column with original text strings.
+        :param mutated_text_column: Name of the column with mutated text strings.
+        :param new_column: Name of the new column to store computed quality preservation status.
+        :return: DataFrame with new column indicating if quality is preserved.
+        """
+        df[new_column] = df.apply(
+            lambda row: self.is_quality_preserved(
+                instruction=row[prompt_column],
+                original_text=row[original_text_column],
+                mutated_text=row[mutated_text_column]
+            )['quality_preserved'],
+            axis=1
+        )
+        return df
     
