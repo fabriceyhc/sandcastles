@@ -81,7 +81,7 @@ if __name__ == "__main__":
     for watermark_type in watermark_types:
         for mutator in mutators:
             
-            trace_df = load_all_csvs("./attack/traces", watermark_type, mutator)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermark_type, mutator)
             
             if trace_df.empty:
                 print(f"[MAIN] No traces found for {watermark_type} + {mutator}")
