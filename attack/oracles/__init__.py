@@ -10,4 +10,7 @@ from .guidance.diff import DiffOracle
 from .rewardbench.armorm import ArmoRMOracle
 from .rewardbench.internlm import InternLMOracle
 from .rewardbench.offsetbias import OffsetBiasOracle
+from .rewardbench.inform import INFORMOracle
+from .rewardbench.qrm import QRMOracle
+from .rewardbench.skywork import SkyworkOracle
 from .human.human import HumanOracle

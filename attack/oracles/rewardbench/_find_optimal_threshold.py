@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Load the CSV file
-file_path = './oracles/results/IMP_oracle_eval.csv'
+file_path = './attack/oracles/results/IMP_oracle_eval_new_rewardbench.csv'
 data = pd.read_csv(file_path)
 data['diff'] = (data['original_score_A'] - data['original_score_B']).abs() 
 
@@ -19,7 +19,7 @@ def calculate_accuracy_for_threshold(threshold, data):
     accuracy = data['correct'].mean()
     return accuracy
 
-oracles = ["OffsetBiasOracle", "InternLMOracle", "ArmoRMOracle"]
+oracles = ["INFORMOracle", "SkyworkOracle", "QRMOracle"]
 
 for oracle in oracles:
 
