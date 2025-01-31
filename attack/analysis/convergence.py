@@ -88,7 +88,7 @@ def calculate_trend_percentages(results):
     
     return pd.DataFrame(summary)
 
-def plot_trend_distribution(embedding_dict):
+def plot_trend_distribution(embedding_dict, save_path="./attack/analysis/figs/convergence.png"):
     """Visualize trend distribution across configurations"""
     plt.figure(figsize=(12, 6))
     
@@ -153,7 +153,9 @@ def plot_trend_distribution(embedding_dict):
     plt.colorbar(label='Statistical Significance (p < 0.05)')
     plt.grid(axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.show()
+    
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
 
 
 if __name__ == "__main__":
@@ -170,6 +172,7 @@ if __name__ == "__main__":
     # Analyze trends
     print("\nAnalyzing prompt-level trends...")
     trend_df = analyze_prompt_trends(embedding_dict)
+    trend_df.to_csv("./attack/analysis/csv/convergence.csv", index=False)
     
     if not trend_df.empty:
         print("\nTrend Analysis Results:")

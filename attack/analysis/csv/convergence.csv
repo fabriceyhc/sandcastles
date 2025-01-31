@@ -1,0 +1,19 @@
+Watermark,Mutator,% Diverging,% Converging,% Stable,Total Prompts
+Adaptive,Document1StepMutator,3.3%,66.7%,30.0%,30
+Adaptive,Document2StepMutator,53.3%,10.0%,36.7%,30
+Adaptive,SentenceMutator,14.8%,63.0%,22.2%,27
+Adaptive,SpanMutator,10.0%,70.0%,20.0%,30
+Adaptive,WordMutator,20.0%,70.0%,10.0%,30
+KGW,Document1StepMutator,33.3%,16.7%,50.0%,30
+KGW,Document2StepMutator,50.0%,12.5%,37.5%,8
+KGW,DocumentMutator,53.3%,6.7%,40.0%,15
+KGW,SentenceMutator,20.0%,63.3%,16.7%,30
+KGW,SpanMutator,13.3%,70.0%,16.7%,30
+KGW,WordMutator,6.7%,83.3%,10.0%,30
+SIR,Document1StepMutator,33.3%,6.7%,60.0%,30
+SIR,Document2StepMutator,70.0%,10.0%,20.0%,30
+SIR,DocumentMutator,66.7%,0.0%,33.3%,30
+SIR,EntropyWordMutator,90.0%,6.7%,3.3%,30
+SIR,SentenceMutator,93.3%,3.3%,3.3%,30
+SIR,SpanMutator,96.7%,0.0%,3.3%,30
+SIR,WordMutator,100.0%,0.0%,0.0%,30
