@@ -72,7 +72,7 @@ def assign_crossfile_group_ids(combined_df):
 # ---------------------------------------------------------------------
 def load_partitioned_data(watermark, mutator):
     pattern = f"*_{watermark}_{mutator}_*part*.csv"
-    source_dir = "./attack/traces/annotated"
+    source_dir = "./attack/traces"
     annotated_dir = "./attack/traces/annotated"
     
     source_files = glob.glob(os.path.join(source_dir, pattern))
@@ -153,18 +153,19 @@ def evaluate_column(df, column):
         elif column == "offsetbias_quality":
             metric = OffsetBiasOracle()
             df = metric.score_dataframe(df, "prompt", "mutated_text", "offsetbias_quality")
-        elif column == "difforacle_quality":
-            llm = models.LlamaCpp(
-                model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
-                echo=False,
-                n_gpu_layers=-1,
-                n_ctx=4096*2
-            )
-            metric = DiffOracle(llm=llm)
-            # NOTE: watch your arguments carefully
-            df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality")
+        # elif column == "difforacle_quality":
+        #     llm = models.LlamaCpp(
+        #         model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
+        #         echo=False,
+        #         n_gpu_layers=-1,
+        #         n_ctx=4096*2
+        #     )
+        #     metric = DiffOracle(llm=llm)
+        #     # NOTE: watch your arguments carefully
+        #     df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality")
         
         # Clean up
+
         del metric
         torch.cuda.empty_cache()
     except Exception as e:
@@ -240,7 +241,11 @@ def process_watermark_mutator_group(watermark, mutator):
 def main():
     # Example usage: CUDA_VISIBLE_DEVICES=0,1 python -m attack.scripts.annotate
     # You can adjust the watermark_types and mutators lists as needed
-    watermark_types = ["Adaptive", "KGW"]  # "SIR", etc.
+    # watermark_types = ["Adaptive", "KGW", "SIR", "GPT4o_unwatermarked"]  # "SIR", etc.
+    watermark_types = ["Adaptive"]
+    # watermark_types = ["KGW"]
+    # watermark_types = ["SIR"]
+    # watermark_types = ["GPT4o_unwatermarked"]
     mutators = [
         "DocumentMutator", "Document1StepMutator", "Document2StepMutator",
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
