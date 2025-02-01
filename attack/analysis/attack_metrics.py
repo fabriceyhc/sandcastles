@@ -20,7 +20,7 @@ def get_max_step_count(df):
 
 def get_successully_attacked_rows(df, watermark_threshold=0.0):
     successful_df = df[(df['quality_preserved'] == True) & 
-                       (df['watermark_score'] < watermark_threshold)]
+                       (df['watermark_score'] < watermark_threshold) & (df['watermark_score'] != 0)]
     successful_df = successful_df.sort_values(by='step_num').groupby('group_id').first().reset_index()
     return successful_df
 
