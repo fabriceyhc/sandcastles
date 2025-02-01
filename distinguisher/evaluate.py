@@ -155,18 +155,22 @@ def main():
     
     oracle = "InternLMOracle"
     length_of_df = 30
+
     # Select watermark types and mutators to evaluate
     watermark_types = [
         "SIR",
+        "KGW",
+        "Adaptive",
+        "GPT4o_unwatermarked"
     ]
     mutators = [
+        "EntropyWordMutator",
         "WordMutator",
         "SpanMutator",
-        # "SentenceMutator",
+        "SentenceMutator",
         "DocumentMutator",
-        # "Document1StepMutator",
-        # "Document2StepMutator",
-        "EntropyWordMutator",
+        "Document1StepMutator",
+        "Document2StepMutator",
     ]
 
     # Construct parts
@@ -175,9 +179,13 @@ def main():
         for mutator in mutators:
             df = get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator)
             if len(df) == 0:
-                log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator}. Skipping.")
+                log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator} in ./attack/traces, trying in ./attack/traces/annotated.")
+                attack_trace_dir = "./attack/traces/annotated"
+                df = get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator)
+                if len(df) == 0:
+                    log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator}. Skipping.")
                 continue
-            log.info(f"Loaded {len(df)} attack traces for {oracle}, {watermark_type}, {mutator}")
+            log.info(f"Loaded {len(df)} attack traces for {oracle}, {watermark_type}, {mutator} from {attack_trace_dir}")
             split_df = split_to_parts(df, length_of_df)
             parts.extend(split_df)
     log.info(f"Total parts: {len(parts)}")
@@ -190,4 +198,7 @@ def main():
         evaluate(sd, parts, "llama3.1-70B-full", length_of_df, 4)
 
 if __name__ == "__main__":
+
+    # CUDA_VISIBLE_DEVICES=0,1 python -m distinguisher.evaluate
+
     main()
