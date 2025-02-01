@@ -184,7 +184,6 @@ def main():
 
     # Evaluate distinguishers
     evaluate(None, parts, "dryrun", length_of_df, 4)
-    return
 
     llm, distinguisher_persona = get_model("llama3.1-70B")
     for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
