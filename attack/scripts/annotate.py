@@ -71,7 +71,7 @@ def assign_crossfile_group_ids(combined_df):
 # Helper: load partitioned data
 # ---------------------------------------------------------------------
 def load_partitioned_data(watermark, mutator):
-    pattern = f"*_{watermark}_{mutator}_*part*.csv"
+    pattern = f"*_{watermark}_{mutator}_*.csv"  # Matches both with and without "part"
     source_dir = "./attack/traces"
     annotated_dir = "./attack/traces/annotated"
     
@@ -136,6 +136,7 @@ def evaluate_column(df, column):
     Compute missing values for a specific column using the corresponding metric.
     Adjust your columns/args as needed depending on your own metrics/oracles.
     """
+    metric = None
     try:
         if column == "words_edited":
             metric = EditsMetric()
