@@ -323,7 +323,11 @@ def load_all_csvs(base_dir, watermark_str, mutator_str):
     csv_files = glob.glob(pattern)
 
     # Sort them so part1 < part2 < part3, etc. (if you have chunked files)
-    csv_files.sort()
+    # extract the part number
+    part = lambda filename: int(filename.split("_part")[-1].split(".")[0]) if "_part" in filename else 0
+    # sort by the base name and then by the part number by converting the filename to a tuple
+    cmp = lambda filename: (filename.split("_part")[0], part(filename))
+    csv_files.sort(key=cmp)
 
     # Read each CSV into a list of DataFrames
     dataframes = []

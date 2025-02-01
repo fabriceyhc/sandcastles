@@ -3,6 +3,7 @@ import pandas as pd
 from itertools import combinations
 from dotenv import load_dotenv, find_dotenv
 from guidance import models
+from attack.utils import load_all_csvs
 
 def extract_unique_column_value(df, column_name):
     """
@@ -30,6 +31,7 @@ def extract_unique_column_value(df, column_name):
         raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
 
 def split_dataframe(df, chunk_size):
+    assert len(df) % chunk_size == 0, "Dataframe length must be divisible by chunk size"
     return [df.iloc[i:i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
 
 def get_id_tuples(num=10):
@@ -130,6 +132,21 @@ def separate_attacks(df):
     
     return attacks
 
+def get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator):
+    df = load_all_csvs(attack_trace_dir, watermark_type, mutator)
+    attacks = separate_attacks(df)
+    all_attacks = []
+    for i, attack in enumerate(attacks):
+        all_attacks.append({
+            'o_str': oracle,
+            'w_str': watermark_type,
+            'm_str': mutator,
+            'attack_num': i,
+            'attack_data': attack
+        })
+    return pd.DataFrame(all_attacks)
+
+# TODO: remove this function
 def process_attack_traces(directory, filter_func=lambda x: True):
     """
     Processes attack traces from files in a specified directory.
