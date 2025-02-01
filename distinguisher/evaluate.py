@@ -1,7 +1,7 @@
 # ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
 
 from distinguisher.models import (SimpleDistinguisher, AggressiveSimple, SimpleGPT, SimplestGPT, LogicGPT, LogicSimple, LogicSimplest)
-from distinguisher.utils import process_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe, get_model, parse_filename
+from distinguisher.utils import get_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe, get_model
 import pandas as pd
 import os
 import datasets
@@ -57,15 +57,17 @@ class AttackParser():
     def get_nth(self, n):
         return self.df[n]
 
-def distinguish_attacks(sd, df, length_of_df, prefix, subsample=1):
+def distinguish_attacks(sd, df, length_of_df, prefix, subsample):
     o_str = extract_unique_column_value(df, "o_str")
     m_str = extract_unique_column_value(df, "m_str")
     w_str = extract_unique_column_value(df, "w_str")
+    if m_str in ["DocumentMutator", "Document1StepMutator", "Document2StepMutator"]:
+        subsample = max(subsample//2, 1)
     if m_str == "SentenceMutator":
         subsample *= 3
     if m_str == "SpanMutator":
         subsample *= 5
-    if m_str == "WordMutator":
+    if m_str in ["WordMutator", "EntropyWordMutator"]:
         subsample *= 20
     prompt_type = extract_unique_column_value(df, "prompt_type")
     ids = get_id_tuples(length_of_df)
@@ -128,74 +130,65 @@ def distinguish_attacks(sd, df, length_of_df, prefix, subsample=1):
 
 # Need to adjust for different datasets
 def split_to_parts(df, length_of_df):
-    unique_values = df['m_str'].unique()
-    dfs_by_m_str = {value: df[df['m_str'] == value].copy() for value in unique_values}
+    split_dfs = split_dataframe(df, length_of_df)
+    assert len(split_dfs) == 3, f"Expected 3 splits, got {len(split_dfs)}"
 
-    further_split_dfs = {}
-    for key, dataframe in dfs_by_m_str.items():
-        split_dfs = split_dataframe(dataframe, length_of_df)
+    # Add "prompt_type" column to each split
+    split_dfs[0]['prompt_type'] = 'paris'
+    split_dfs[1]['prompt_type'] = 'space'
+    split_dfs[2]['prompt_type'] = 'news'
 
-        # Add "prompt_type" column to each split
-        split_dfs[0]['prompt_type'] = 'paris'
-        split_dfs[1]['prompt_type'] = 'space'
-        split_dfs[2]['prompt_type'] = 'news'
+    return split_dfs
 
-        further_split_dfs[key] = {
-            f'{key}_part1': split_dfs[0],
-            f'{key}_part2': split_dfs[1],
-            f'{key}_part3': split_dfs[2]
-        }
-
-    # Verify each further split has length_of_df rows and order is preserved
-    for _, splits in further_split_dfs.items():
-        for part_key, part_df in splits.items():
-            assert len(part_df) == length_of_df, f"{part_key} does not have {length_of_df} rows."
-
-    parts = [part for splits in further_split_dfs.values() for part in splits.values()]
-    return parts
+def evaluate(distinguisher, parts, prefix, length_of_df, subsample):
+    total_len = 0
+    for i, part in enumerate(parts):
+        log.info(f"Processing part {i+1}/{len(parts)}")
+        part_len = distinguish_attacks(distinguisher, part, length_of_df, prefix, subsample)
+        total_len += part_len
+        log.info(f"Distinguishes per experiment: {part_len/60:.2f}\n")
+    log.info(f"Total length: {total_len}")
 
 def main():
     # Directory containing attack traces
     attack_trace_dir = "attack/traces/"
-
-    # Filter to parse only files that evaluate as True
-    def filter_func(filename):
-        if not filename.endswith(".csv"):
-            return False
-        if "annotated" in filename:
-            return False
-        o_str, w_str, m_str, n_steps = parse_filename(filename)
-        # print(filename, w_str, m_str)
-        # return w_str in ["GPT4o_unwatermarked", "KGW", "Adaptive"] and m_str in ["WordMutator", "SpanMutator", "SentenceMutator"]
-        return w_str in ["Adaptive"] and m_str in ["WordMutator", "SpanMutator", "SentenceMutator"]
-
-    for filename in filter(filter_func, os.listdir(attack_trace_dir)):
-        log.info(filename)
     
-    all_attacks = process_attack_traces(attack_trace_dir, filter_func)
-
-    # TODO: Use the lambda function to filter the attacks
-    # Reading all the traces then filtering takes unnecessarily long and too much RAM
-
-    df = pd.DataFrame(all_attacks)
+    oracle = "InternLMOracle"
     length_of_df = 30
-    parts = split_to_parts(df, length_of_df)
-    log.info(f"Number of parts: {len(parts)}")
+    # Select watermark types and mutators to evaluate
+    watermark_types = [
+        "SIR",
+    ]
+    mutators = [
+        "WordMutator",
+        "SpanMutator",
+        # "SentenceMutator",
+        "DocumentMutator",
+        # "Document1StepMutator",
+        # "Document2StepMutator",
+        "EntropyWordMutator",
+    ]
 
-    total_len = 0
-    for i, part in enumerate(parts):
-        log.info(f"Processing part {i+1}/{len(parts)}")
-        part_len = distinguish_attacks(None, part, length_of_df, "dryrun", 4)
-        total_len += part_len
-        log.info(f"Part length: {part_len}\n")
-    log.info(f"Total length: {total_len}")
+    # Construct parts
+    parts = []
+    for watermark_type in watermark_types:
+        for mutator in mutators:
+            df = get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator)
+            if len(df) == 0:
+                log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator}. Skipping.")
+                continue
+            log.info(f"Loaded {len(df)} attack traces for {oracle}, {watermark_type}, {mutator}")
+            split_df = split_to_parts(df, length_of_df)
+            parts.extend(split_df)
+    log.info(f"Total parts: {len(parts)}")
+
+    # Evaluate distinguishers
+    evaluate(None, parts, "dryrun", length_of_df, 4)
+    return
 
     llm, distinguisher_persona = get_model("llama3.1-70B")
-
     for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
-        for i, part in enumerate(parts):
-            log.info(f"Processing part {i+1}/{len(parts)}")
-            distinguish_attacks(sd, part, length_of_df, "llama3.1-70B-full", 4)
+        evaluate(sd, parts, "llama3.1-70B-full", length_of_df, 4)
 
 if __name__ == "__main__":
     main()
