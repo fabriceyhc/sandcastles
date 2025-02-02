@@ -300,7 +300,7 @@ def strip_punct(word):
 
     return (left_punctuation, stripped_word, right_punctuation)
     
-def load_all_csvs(base_dir, watermark_str, mutator_str):
+def load_all_csvs(base_dir, watermark_str, mutator_str, ignore_long=True):
     """
     Searches anywhere in the filename for the given `mutator_str`
     (e.g. "WordMutator", "SentenceMutator", etc.) and loads all
@@ -321,6 +321,9 @@ def load_all_csvs(base_dir, watermark_str, mutator_str):
 
     # Get all matching CSV files
     csv_files = glob.glob(pattern)
+
+    if ignore_long:
+        csv_files = [f for f in csv_files if not ("Sentence" in f and "500" in f)]
 
     # Sort them so part1 < part2 < part3, etc. (if you have chunked files)
     # extract the part number
