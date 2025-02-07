@@ -16,12 +16,16 @@ output_file = "./distinguisher/data/failed_distinguishes_for_llama3.1-70B-full.c
 # List to collect data from all files
 all_disagreements = []
 
+total_distinguishes = 0
+
 # Iterate through matched CSV files using glob
 for file_path in glob.glob(file_pattern):
     print(f"Processing: {file_path}")
     
     # Load the CSV file
     df = pd.read_csv(file_path)
+
+    total_distinguishes += len(df)
     
     # Assign group_ids based on each time Num == 0
     df['group_id'] = (df['Num'] == 0).cumsum()
@@ -43,8 +47,13 @@ for file_path in glob.glob(file_pattern):
 # Concatenate all results
 if all_disagreements:
     final_df = pd.concat(all_disagreements, ignore_index=True)
+    num_failed = len(final_df)
     
     final_df.to_csv(output_file, index=False)
     print(f"Saved output to {output_file}")
+
+    print(f"Total Rows Distinguished: {total_distinguishes}")
+    print(f"Total Rows Failed: {num_failed}")
+    print(f"Percent Correct: {num_failed / total_distinguishes}")
 else:
     print("No disagreements found in any matching file.")
