@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     traces = glob.glob("./attack/traces/annotated/*")
 
-    traces = [trace for trace in traces if "part" not in trace and "GPT" in trace and "Span" in trace]
+    traces = [trace for trace in traces if "KGW" in trace and "Entropy" in trace]
     
     for trace in traces:
         chunk_paths = split_csv_by_approx_size(trace)

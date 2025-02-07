@@ -12,6 +12,16 @@ from guidance import models
 # Additional imports from your original environment
 # (assuming they exist in your codebase)
 # ---------------------------------------------------------------------
+import shutil
+import torch
+import re
+import logging
+from guidance import models 
+
+# ---------------------------------------------------------------------
+# Additional imports from your original environment
+# (assuming they exist in your codebase)
+# ---------------------------------------------------------------------
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
     ArmoRMOracle,
@@ -141,22 +151,27 @@ def evaluate_column(df, column):
     metric = None
     try:
         if column == "words_edited":
+            print(f"Loading EditsMetric()")
             metric = EditsMetric()
             df = metric.evaluate_dataframe(df, "current_text", "mutated_text", "words_edited")
         elif column == "perplexity":
+            print(f"Loading FluencyMetric()")
             metric = FluencyMetric()
             df = metric.evaluate_dataframe(df, "mutated_text", "perplexity")
         elif column == "grammar_errors":
+            print(f"Loading GrammarMetric()")
             metric = GrammarMetric()
             df = metric.evaluate_dataframe(df, "mutated_text", "grammar_errors")
         elif column == "armolm_quality":
+            print(f"Loading ArmoRMOracle()")
             metric = ArmoRMOracle()
-            # NOTE: make sure "prompt" and "mutated_text" exist
             df = metric.score_dataframe(df, "prompt", "mutated_text", "armolm_quality")
         elif column == "offsetbias_quality":
+            print(f"Loading OffsetBiasOracle()")
             metric = OffsetBiasOracle()
             df = metric.score_dataframe(df, "prompt", "mutated_text", "offsetbias_quality")
         # elif column == "difforacle_quality":
+        #     print(f"Loading DiffOracle(Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf)")
         #     llm = models.LlamaCpp(
         #         model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
         #         echo=False,
@@ -244,13 +259,13 @@ def process_watermark_mutator_group(watermark, mutator):
 def main():
     # Example usage: CUDA_VISIBLE_DEVICES=0,1 python -m attack.scripts.annotate
     # You can adjust the watermark_types and mutators lists as needed
-    # watermark_types = ["Adaptive", "KGW", "SIR", "GPT4o_unwatermarked"]  # "SIR", etc.
-    watermark_types = ["Adaptive"]
+    watermark_types = ["Adaptive", "KGW", "SIR", "GPT4o_unwatermarked"]  # "SIR", etc.
+    # watermark_types = ["Adaptive"]
     # watermark_types = ["KGW"]
     # watermark_types = ["SIR"]
     # watermark_types = ["GPT4o_unwatermarked"]
     mutators = [
-        "DocumentMutator", "Document1StepMutator", "Document2StepMutator",
+        "Document1StepMutator", "Document2StepMutator", # "DocumentMutator", 
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
@@ -263,4 +278,7 @@ def main():
                 print(f"Failed processing {watermark}-{mutator}: {str(e)}\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
+
+    # CUDA_VISIBLE_DEVICES=0 python -m attack.scripts.annotate
+
     main()

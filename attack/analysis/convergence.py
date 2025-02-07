@@ -55,7 +55,7 @@ def analyze_prompt_trends(embedding_dict):
             slope, _, _, p_value, _ = linregress(valid_steps, similarities)
             
             # Classify trend
-            if p_value > 0.05:
+            if p_value > 0.05: # 0.01, 0.05, 0.10, 0.20
                 trend = 'stable'
             else:
                 trend = 'diverging' if slope < 0 else 'converging'

@@ -23,9 +23,9 @@ def main(cfg):
 
     datasets = [
         # "KGW",
-        "SIR",
+        # "SIR",
         # "Adaptive",
-        # "GPT4o_unwatermarked",
+        "GPT4o_unwatermarked",
         # "unwatermarked",
         # "Adaptive",
         # "distinguisher",
@@ -37,8 +37,8 @@ def main(cfg):
         # SpanMutator,
         # SentenceMutator,
         # Document1StepMutator,
-        Document2StepMutator,
-        # DocumentMutator,
+        # Document2StepMutator,
+        DocumentMutator,
     ]
 
     # Initialize Quality Oracle
@@ -73,9 +73,9 @@ def main(cfg):
 
             cfg.attack.log_csv_path = f"./attack/traces/{o_str}_{d}_{m_str}_n-steps={cfg.attack.max_steps}_attack_results.csv"
 
-            if os.path.exists(cfg.attack.log_csv_path):
-                log.info(f"skipping this attack configuration: {cfg.attack.log_csv_path}")
-                continue
+            # if os.path.exists(cfg.attack.log_csv_path):
+            #     log.info(f"skipping this attack configuration: {cfg.attack.log_csv_path}")
+            #     continue
 
             log.info(f"Initializing attacker...")
             attacker = Attack(cfg, mutator, oracle)
@@ -91,6 +91,6 @@ def main(cfg):
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0,1,2,3 python -m attack.scripts.run
+    # CUDA_VISIBLE_DEVICES=1,2 python -m attack.scripts.run
 
     main()
