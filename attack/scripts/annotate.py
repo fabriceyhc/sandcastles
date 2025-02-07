@@ -12,6 +12,16 @@ from guidance import models
 # Additional imports from your original environment
 # (assuming they exist in your codebase)
 # ---------------------------------------------------------------------
+import shutil
+import torch
+import re
+import logging
+from guidance import models 
+
+# ---------------------------------------------------------------------
+# Additional imports from your original environment
+# (assuming they exist in your codebase)
+# ---------------------------------------------------------------------
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
     ArmoRMOracle,
@@ -60,22 +70,12 @@ def assign_crossfile_group_ids(combined_df):
     """
     Assign group IDs that work across multiple files using step_num sequence.
     In this example, we assume step_num == -1 indicates a new group start.
-<<<<<<< HEAD
-    """
-    # combined_df = combined_df.sort_values(by=["step_num", "__filepath__"])
-    combined_df['new_group'] = (combined_df['step_num'] == -1).astype(int)
-    combined_df['group_id'] = combined_df['new_group'].cumsum()
-    combined_df = combined_df.drop(columns=['new_group'])
-    combined_df = combined_df.sort_values(by=["group_id", "step_num"])
-    return combined_df
-=======
     You can adjust as needed.
     """
     combined_df = combined_df.sort_values(by=["step_num", "__filepath__"])
     combined_df['new_group'] = (combined_df['step_num'] == -1).astype(int)
     combined_df['group_id'] = combined_df['new_group'].cumsum()
     return combined_df.drop(columns=['new_group'])
->>>>>>> 05a01171709122f21adeb0f9bbb26313fc74d014
 
 # ---------------------------------------------------------------------
 # Helper: load partitioned data
@@ -271,8 +271,5 @@ def main():
                 print(f"Failed processing {watermark}-{mutator}: {str(e)}\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    main()
-=======
     main()
 >>>>>>> 05a01171709122f21adeb0f9bbb26313fc74d014
