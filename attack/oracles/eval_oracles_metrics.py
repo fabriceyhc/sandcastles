@@ -14,7 +14,7 @@ def analyze_response_quality(file_paths, penalty_weights=None):
         penalty_weights = {
             "A_BETTER": 1.0,
             "B_BETTER": 1.0,
-            "TIE": 1.0
+            # "TIE": 1.0
         }
 
     # Load the dataset
@@ -29,12 +29,14 @@ def analyze_response_quality(file_paths, penalty_weights=None):
 
     # Ensure the dataframe contains only the columns specified in 'cols'
     df = df[cols]
+    df['original_label'] = df['original_label'].replace('ResponseQuality.TIE', 'ResponseQuality.B_BETTER')
+    df['original_pred'] = df['original_pred'].replace('ResponseQuality.TIE', 'ResponseQuality.B_BETTER')
 
     # Mapping enum string values to integer labels
     mapping = {
         "ResponseQuality.A_BETTER": 0,
         "ResponseQuality.B_BETTER": 1,
-        "ResponseQuality.TIE": 2
+        # "ResponseQuality.TIE": 2
     }
 
     # Apply the mapping to the relevant columns
@@ -125,7 +127,7 @@ file_paths = [
 penalty_weights = {
     "A_BETTER": 1.0,
     "B_BETTER": 1.0,
-    "TIE": 1.0
+    # "TIE": 1.0
 }
 
 results = analyze_response_quality(file_paths, penalty_weights=penalty_weights)
