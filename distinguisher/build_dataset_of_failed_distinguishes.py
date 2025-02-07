@@ -54,6 +54,6 @@ if all_disagreements:
 
     print(f"Total Rows Distinguished: {total_distinguishes}")
     print(f"Total Rows Failed: {num_failed}")
-    print(f"Percent Correct: {num_failed / total_distinguishes}")
+    print(f"Percent Correct: {1 - (num_failed / total_distinguishes)}")
 else:
     print("No disagreements found in any matching file.")
