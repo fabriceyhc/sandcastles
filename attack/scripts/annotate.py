@@ -26,7 +26,7 @@ from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
     ArmoRMOracle,
     OffsetBiasOracle,
-    DiffOracle
+    # DiffOracle
 )
 
 # ---------------------------------------------------------------------
@@ -72,10 +72,12 @@ def assign_crossfile_group_ids(combined_df):
     In this example, we assume step_num == -1 indicates a new group start.
     You can adjust as needed.
     """
-    combined_df = combined_df.sort_values(by=["step_num", "__filepath__"])
+    # combined_df = combined_df.sort_values(by=["step_num", "__filepath__"])
     combined_df['new_group'] = (combined_df['step_num'] == -1).astype(int)
     combined_df['group_id'] = combined_df['new_group'].cumsum()
-    return combined_df.drop(columns=['new_group'])
+    combined_df = combined_df.drop(columns=['new_group'])
+    combined_df = combined_df.sort_values(by=["group_id", "step_num"])
+    return combined_df
 
 # ---------------------------------------------------------------------
 # Helper: load partitioned data
