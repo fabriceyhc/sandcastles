@@ -1,0 +1,18 @@
+Watermark,Mutator,% Diverging,% Stable,Total Traces
+Adaptive,Document1StepMutator,31.1%,68.9%,90
+Adaptive,Document2StepMutator,75.6%,24.4%,90
+Adaptive,SentenceMutator,47.4%,52.6%,78
+Adaptive,SpanMutator,47.8%,52.2%,90
+Adaptive,WordMutator,60.0%,40.0%,90
+KGW,Document1StepMutator,56.7%,43.3%,178
+KGW,DocumentMutator,44.9%,55.1%,78
+KGW,SentenceMutator,48.9%,51.1%,90
+KGW,SpanMutator,45.6%,54.4%,90
+KGW,WordMutator,56.7%,43.3%,90
+SIR,Document1StepMutator,64.9%,35.1%,57
+SIR,Document2StepMutator,85.5%,14.5%,76
+SIR,DocumentMutator,66.3%,33.7%,83
+SIR,EntropyWordMutator,98.9%,1.1%,90
+SIR,SentenceMutator,100.0%,0.0%,99
+SIR,SpanMutator,98.9%,1.1%,90
+SIR,WordMutator,100.0%,0.0%,90

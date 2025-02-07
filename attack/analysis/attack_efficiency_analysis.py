@@ -9,7 +9,7 @@ from collections import defaultdict
 from scipy.optimize import curve_fit
 from attack.utils import load_all_csvs
 
-mutators = ["Document1StepMutator", "Document2StepMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
+mutators = ["Document1StepMutator", "Document2StepMutator", "DocumentMutator", "SentenceMutator", "SpanMutator", "EntropyWordMutator", "WordMutator"]
 watermarks = ["GPT4o_unwatermarked", "Adaptive", "KGW", "SIR"]
 watermark_thresholds = {
     "Adaptive" : 70,
@@ -30,8 +30,20 @@ def plot_sliding_window_success_rates():
 
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        # fig, axs = plt.subplots(3, 3, figsize=(20, 12))
+        # axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[2,0], axs[2,1]]
+
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
@@ -52,11 +64,27 @@ def plot_sliding_window_success_rates():
             final_data = [pd.DataFrame(columns=["step_num", "quality_preserved"]) for e in range(1,11)]
             num_traces_per_entropy = [0] * 10
 
-            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator, annotated=False)
+            # bit silly 
+            csvs = [
+                load_all_csvs("./attack/traces", watermarker, mutator),
+                load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+            ]
+            
+            trace_df = pd.concat(csvs, ignore_index=True)
+
             if trace_df.empty:
                 print(f"\t\tEmpty dataframe! Skipping {watermarker}, {mutator}")
                 continue
             trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            pain = trace_df[trace_df['step_num'] == "======="]
+            if not pain.empty: print(pain)
+            try:
+                trace_df = trace_df[trace_df['step_num'] <= num_steps(mutator)]
+            except:            
+                trace_df['step_num'] = pd.to_numeric(trace_df['step_num'])
+                trace_df = trace_df[trace_df['step_num'] <= num_steps(mutator)]
+
 
             for run_num, attack in trace_df.groupby('trace_num'):
                 attack["quality_preserved"] = attack["quality_preserved"].rolling(window=window_size, min_periods=1).mean()
@@ -71,7 +99,7 @@ def plot_sliding_window_success_rates():
                 color = entropy_colors[i]
                 axs[idm].plot(entropy_df["step_num"], entropy_df["quality_preserved"]/num_traces_per_entropy[i], alpha=.8, color=color)
 
-        
+        fig.tight_layout(pad=3)
         plt.savefig(f"./attack/analysis/figs/rolling_success_{watermarker}.png")
 
 
@@ -80,8 +108,22 @@ def plot_sliding_window_success_rates():
 def plot_quality_degredation_vs_zscore():
     for idx, watermarker in enumerate(annotated_watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        # fig, axs = plt.subplots(3, 3, figsize=(20, 12))
+        # axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[2,0], axs[2,1]]
+
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
+
+
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
@@ -150,13 +192,23 @@ def plot_quality_degredation_vs_zscore():
             axs[idm].set_title(mutator)
             axs[idm].legend()
         
+        fig.tight_layout(pad=3)
         plt.savefig(f"./attack/analysis/figs/zscore_vs_quality_{watermarker}.png")
 
 def plot_estimated_watermark_breaking():
     for watermarker in annotated_watermarks:
-        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2],
-               axs[1,0], axs[1,1], axs[1,2]]
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
+
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
@@ -340,8 +392,8 @@ def plot_estimated_watermark_breaking():
         for ax in axs:
             ax.set_ylim(global_min, global_max)
 
+        fig.tight_layout(pad=3)
         plt.savefig(f"./attack/analysis/figs/estimated_breaking_{watermarker}.png")
-        plt.close(fig)
 
 
 
@@ -350,14 +402,24 @@ def sanity_checks(metric):
 
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
             print(f"\tPlotting for {mutator}")
 
             axs[idm].set_xlabel("Step Number")
+            axs[idm].set_ylabel(metric)
             axs[idm].set_title(mutator)
 
             # set legend for colors 
@@ -366,7 +428,7 @@ def sanity_checks(metric):
             cbar.set_label('Entropy Level')
             
 
-            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator, annotated=False)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if metric not in trace_df.columns:
                 print(f"\t\tDataframe missing {metric}! Skipping {watermarker}, {mutator}")
                 continue
@@ -375,16 +437,89 @@ def sanity_checks(metric):
             for run_num, attack in trace_df.groupby('trace_num'):
                 entropy = prompt_to_entropy(attack["prompt"].iloc[0])
                 color = entropy_colors[entropy-1]
-                axs[idm].plot(attack["step_num"], attack[metric], alpha=.8, color=color)
+                label = f"{watermarker},{mutator},{run_num}"
+                axs[idm].plot(attack["step_num"], attack[metric], alpha=.8, color=color, label=label)
 
         
+        fig.tight_layout(pad=3)
         plt.savefig(f"./attack/analysis/figs/sanity_checks/{metric}_{watermarker}.png")
 
-def sanity_checks_rolling(metric):
+
+
+def sanity_checks_rolling(metric, include_unannotated=False):
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
-        fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-        axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[1,2]]
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
+        plt.suptitle(watermarker)
+
+        for idm, mutator in enumerate(mutators):
+            print(f"\tPlotting for {mutator}")
+
+            axs[idm].set_xlabel("Step Number")
+            axs[idm].set_ylabel(metric)
+            axs[idm].set_title(mutator)
+
+            # set legend for colors 
+            sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
+            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
+            cbar.set_label('Entropy Level')
+
+            if include_unannotated == None:
+                # only unannotated
+                trace_df = load_all_csvs("./attack/traces", watermarker, mutator)
+            elif include_unannotated == False:
+                # only annotated
+                trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+            else:
+                # both annotated, unannotated
+                trace_df = pd.concat([
+                    load_all_csvs("./attack/traces", watermarker, mutator),
+                    load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+                ], ignore_index=True)
+            
+
+            if metric not in trace_df.columns:
+                print(f"\t\tDataframe missing {metric}! Skipping {watermarker}, {mutator}")
+                continue
+            trace_df['trace_num'] = (trace_df['step_num'] == -1).cumsum()
+
+            for run_num, attack in trace_df.groupby('trace_num'):
+                window_size = num_steps(mutator)//10
+                attack[metric] = attack[metric].rolling(window=window_size, min_periods=1).mean()
+                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
+                color = entropy_colors[entropy-1]
+                label = f"{watermarker},{mutator},{run_num}"
+                axs[idm].plot(attack["step_num"], attack[metric], alpha=.8, color=color, label=label)
+
+        
+        fig.tight_layout(pad=3)
+        plt.savefig(f"./attack/analysis/figs/sanity_checks/rolling_{metric}_{watermarker}.png")
+
+
+def sanity_checks_rolling_entropy(metric):
+    for idx, watermarker in enumerate(watermarks):
+        print(f"Plotting {watermarker}")
+        fig = plt.figure(figsize=(26, 12))
+        axs = [
+            plt.subplot2grid((2,8), (0,1), colspan=2),            
+            plt.subplot2grid((2,8), (0,3), colspan=2),           
+            plt.subplot2grid((2,8), (0,5), colspan=2),
+
+            plt.subplot2grid((2,8), (1,0), colspan=2),           
+            plt.subplot2grid((2,8), (1,2), colspan=2),
+            plt.subplot2grid((2,8), (1,4), colspan=2),           
+            plt.subplot2grid((2,8), (1,6), colspan=2),
+        ]
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
@@ -425,7 +560,8 @@ def sanity_checks_rolling(metric):
                 axs[idm].plot(entropy_df["step_num"], entropy_df[metric]/num_traces_per_entropy[i], alpha=.8, color=color)
            
             
-        plt.savefig(f"./attack/analysis/figs/sanity_checks/rolling_{metric}_{watermarker}.png")
+        fig.tight_layout(pad=3)
+        plt.savefig(f"./attack/analysis/figs/sanity_checks/rolling_entropy_{metric}_{watermarker}.png")
 
 def prompt_to_entropy(prompt):
     if "story" in prompt:
@@ -512,12 +648,6 @@ def num_steps(mutator):
         return 150
 
 
-def exponential(x, a, b):
-    return a * np.e**(x / (-b))
-
-def exponential50(x, a, b):
-    return a * np.e**(x / (-b)) + 50
-
 def exponential_offset(x, A, B, C):
     """
     A * exp(-x / B) + C
@@ -534,7 +664,8 @@ if __name__ ==  "__main__":
 
     # python -m attack.analysis.attack_efficiency_analysis
 
-    # plot_sliding_window_success_rates()
-    # plot_quality_degredation_vs_zscore()
+    plot_sliding_window_success_rates()
+    plot_quality_degredation_vs_zscore()
     plot_estimated_watermark_breaking()
-    # sanity_checks_rolling("nicolai_quality")
+
+    # sanity_checks_rolling("quality_preserved", include_unannotated=True)

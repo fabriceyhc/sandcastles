@@ -138,6 +138,26 @@ if __name__ == "__main__":
 
     # python -m attack.analysis.success_rate_calculator
 
+    # # Initialize with test data
+    # true_labels = [1, 1, 0, 0, 1, 0, 1]
+    # scores = [0.95, 0.87, 0.45, 0.32, 0.78, 0.51, 0.82]
+    # evaluator = WatermarkMetricsEvaluator(true_labels, scores)
+
+    # # Find optimal F1 threshold
+    # best_threshold = evaluator.find_optimal_threshold(metric='f1')
+    # print(f"Optimal F1 threshold: {best_threshold:.2f}")
+
+    # # Find threshold at 10% FPR
+    # fpr_threshold = evaluator.find_threshold_at_fpr(target_fpr=0.1)
+    # print(f"FPR 0.1 threshold: {fpr_threshold:.2f}")
+
+    # # Compare metrics at different thresholds
+    # print("\nMetrics at 0.5 threshold:")
+    # print(evaluator.compute_metrics(0.5))
+
+    # print("\nMetrics at optimal threshold:")
+    # print(evaluator.compute_metrics(best_threshold))
+
     from attack.utils import load_all_csvs
     import pandas as pd
 
@@ -167,15 +187,7 @@ if __name__ == "__main__":
     mutators = ["DocumentMutator", "Document1StepMutator", "Document2StepMutator", 
             "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"]
 
-    unwatermarked_mean_std = {
-        "Adaptive": (49.425769812530945, 3.3846567364055837),
-        "KGW": (-0.8277770841872096, 1.0529608950427352),
-        "SIR": (0.0775412526135454, 0.06861609056292908),
-    }
-
-    results = []
     for watermark_type in watermark_types:
-        score_mean, score_std = unwatermarked_mean_std[watermark_type]
         for mutator in mutators:
             print(f"\n[MAIN] {watermark_type} + {mutator} Results:")
             df = load_all_csvs("./attack/traces/annotated", watermark_type, mutator)
@@ -196,45 +208,4 @@ if __name__ == "__main__":
             print(attack_metrics[['group_id', 'init_watermark_score', 'min_watermark_score', 
                                 'final_watermark_score', 'total_attack_steps',
                                 'min_score_step']].head().to_string(index=False))
-
-            min_scores = attack_metrics['min_watermark_score'].tolist()
-            fin_scores = attack_metrics['final_watermark_score'].tolist()
-            true_labels = [1 for _ in range(len(min_scores))]
-
-            for name, scores in [('min', min_scores), ('fin', fin_scores)]:
-
-                evaluator = WatermarkMetricsEvaluator(true_labels, scores)
-
-                for i in range(4): # to explore 3 standard deviations from mean unwatermarked
-
-                    threshold = score_mean + (i * score_std)
-                    metrics = evaluator.compute_metrics(threshold)
-
-                    results.append({
-                        "watermark_type": watermark_type,
-                        "mutator": mutator,
-                        "score_type": name,
-                        "score_mean": score_mean,
-                        "score_std": score_std,
-                        "threshold": threshold,
-                        **metrics
-                    })
-
-    df = pd.DataFrame(results)
-    df.to_csv("./attack/analysis/csv/success_rates.csv", index=False)
-
-
-                # # Find optimal F1 threshold
-                # best_threshold = evaluator.find_optimal_threshold(metric='f1')
-                # print(f"Optimal F1 threshold for {name}: {best_threshold:.2f}")
-
-                # # Find threshold at 10% FPR
-                # fpr_threshold = evaluator.find_threshold_at_fpr(target_fpr=0.1)
-                # print(f"FPR 0.1 threshold for {name}: {fpr_threshold:.2f}")
-
-                # # Compare metrics at different thresholds
-                # print(f"\nMetrics at fpr={fpr_threshold} threshold for {name}:")
-                # print(evaluator.compute_metrics(fpr_threshold))
-
-                # print(f"\nMetrics at optimal={best_threshold} threshold for {name}:")
-                # print(evaluator.compute_metrics(best_threshold))    
+                

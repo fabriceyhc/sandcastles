@@ -1,0 +1,8 @@
+mutator,% prompts >= 0.90
+Document1StepMutator,0.0
+Document2StepMutator,86.66666666666667
+DocumentMutator,36.666666666666664
+EntropyWordMutator,86.66666666666667
+SentenceMutator,0.0
+SpanMutator,0.0
+WordMutator,0.0

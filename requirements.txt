@@ -5,3 +5,5 @@ openai
 hydra-core
 python-dotenv
 einops
+h5py
+seaborn

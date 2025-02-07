@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm.auto import tqdm
 
 class BaseRewardBenchOracle:
     """
@@ -6,19 +7,26 @@ class BaseRewardBenchOracle:
     Child oracles only need to define the '_score_example' method.
     """
 
-    def score_samples(self, prompts, texts, return_mean=True):
+    def score_samples(self, prompts, texts, return_mean=True, progress_desc="Scoring samples"):
         """
-        Evaluate pairs of (prompt, text) by calling '_score_example' for each pair.
-
-        :param prompts: List of prompt strings.
-        :param texts: List of text/response strings.
-        :param return_mean: If True, returns the mean of scores. Otherwise returns a NumPy array of scores.
-        :return: float (mean) or np.array (all scores).
+        Evaluate pairs of (prompt, text) with progress tracking.
+        
+        :param prompts: List of prompt strings
+        :param texts: List of text/response strings
+        :param return_mean: Return mean score if True, else all scores
+        :param progress_desc: Description for progress bar
+        :return: float (mean) or np.array (all scores)
         """
         all_scores = []
-        for prompt, text in zip(prompts, texts):
+        
+        # Wrap the zip with tqdm for progress tracking
+        for prompt, text in tqdm(zip(prompts, texts),
+                                total=len(prompts),
+                                desc=progress_desc,
+                                leave=False):
             score = self._score_example(prompt, text)
             all_scores.append(score)
+            
         all_scores = np.array(all_scores)
         return all_scores.mean() if return_mean else all_scores
 
