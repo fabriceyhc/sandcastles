@@ -168,17 +168,16 @@ def evaluate_column(df, column):
             print(f"Loading OffsetBiasOracle()")
             metric = OffsetBiasOracle()
             df = metric.score_dataframe(df, "prompt", "mutated_text", "offsetbias_quality")
-        # elif column == "difforacle_quality":
-        #     print(f"Loading DiffOracle(Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf)")
-        #     llm = models.LlamaCpp(
-        #         model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
-        #         echo=False,
-        #         n_gpu_layers=-1,
-        #         n_ctx=4096*2
-        #     )
-        #     metric = DiffOracle(llm=llm)
-        #     # NOTE: watch your arguments carefully
-        #     df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality")
+        elif column == "difforacle_quality":
+            print(f"Loading DiffOracle(Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf)")
+            llm = models.LlamaCpp(
+                model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
+                echo=False,
+                n_gpu_layers=-1,
+                n_ctx=4096*2
+            )
+            metric = DiffOracle(llm=llm)
+            df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N=10)
         
         # Clean up
 
@@ -277,6 +276,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0 python -m attack.scripts.annotate
+    # CUDA_VISIBLE_DEVICES=0,1 python -m attack.scripts.annotate
 
     main()

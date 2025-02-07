@@ -142,26 +142,31 @@ class Oracle(ABC):
         return label # TIE stays the same
 
 
-    def score_dataframe(self, df, prompt_column, original_text_column, mutated_text_column, new_column):
+    def score_dataframe(self, df, prompt_column, original_text_column, mutated_text_column, new_column, N=1):
         """
         Evaluate a pandas DataFrame with progress tracking, adding a new column indicating if quality is preserved.
+        Only scores every Nth row.
 
         :param df: pandas DataFrame containing prompts, original texts, and mutated texts.
         :param prompt_column: Name of the column with prompt strings.
         :param original_text_column: Name of the column with original text strings.
         :param mutated_text_column: Name of the column with mutated text strings.
         :param new_column: Name of the new column to store computed quality preservation status.
-        :param progress_desc: Description for progress bar
+        :param N: Integer indicating the interval at which to score rows (e.g., every Nth row).
         :return: DataFrame with new column indicating if quality is preserved.
         """
         results = []
         
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Scoring dataframe", leave=False):
-            result = self.is_quality_preserved(
-                instruction=row[prompt_column],
-                original_text=row[original_text_column],
-                mutated_text=row[mutated_text_column]
-            )['quality_preserved']
+        for idx, row in tqdm(df.iterrows(), total=len(df), desc="Scoring dataframe", leave=False):
+            # Only score the first and every Nth row
+            if row["step_num"] == -1 or row["step_num"] % N == 0: 
+                result = self.is_quality_preserved(
+                    instruction=row[prompt_column],
+                    original_text=row[original_text_column],
+                    mutated_text=row[mutated_text_column]
+                )['quality_preserved']
+            else:
+                result = None 
             results.append(result)
         
         df[new_column] = results
