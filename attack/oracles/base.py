@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import partial
 from enum import Enum
+from tqdm.auto import tqdm
 from attack.oracles.utils import add_prefix_to_keys
 from guidance import models 
 
@@ -23,7 +24,7 @@ class Oracle(ABC):
             model=path,
             echo=False,
             n_gpu_layers=-1,
-            n_ctx=4096
+            n_ctx=4096*2
         )
         return llm
 
@@ -139,4 +140,30 @@ class Oracle(ABC):
         elif label == ResponseQuality.B_BETTER:
             return ResponseQuality.A_BETTER
         return label # TIE stays the same
-    
+
+
+    def score_dataframe(self, df, prompt_column, original_text_column, mutated_text_column, new_column):
+        """
+        Evaluate a pandas DataFrame with progress tracking, adding a new column indicating if quality is preserved.
+
+        :param df: pandas DataFrame containing prompts, original texts, and mutated texts.
+        :param prompt_column: Name of the column with prompt strings.
+        :param original_text_column: Name of the column with original text strings.
+        :param mutated_text_column: Name of the column with mutated text strings.
+        :param new_column: Name of the new column to store computed quality preservation status.
+        :param progress_desc: Description for progress bar
+        :return: DataFrame with new column indicating if quality is preserved.
+        """
+        results = []
+        
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Scoring dataframe", leave=False):
+            result = self.is_quality_preserved(
+                instruction=row[prompt_column],
+                original_text=row[original_text_column],
+                mutated_text=row[mutated_text_column]
+            )['quality_preserved']
+            results.append(result)
+        
+        df[new_column] = results
+        return df
+        
