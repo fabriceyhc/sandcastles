@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -176,66 +177,150 @@ def format_success_rates(df):
 
     return df_pivot
 
-def plot_f1_scores(df, std_index=1, save_path="./attack/analysis/figs/f1_scores.png"):
+def plot_f1_scores(df, std_index=2, save_path="./attack/analysis/figs/f1_scores.png"):
     """
-    Plots F1_fin and F1_min scores for different watermarking schemes and mutators using seaborn.
-    
+    Plots F1_fin and F1_min scores for different watermarking schemes and mutators using seaborn,
+    distinguishing them with different marker shapes.
+
     Parameters:
         df (pd.DataFrame): The DataFrame containing the data.
         std_index (int): The index of the standard deviation threshold to use (default is 2).
         save_path (str): The path to save the image as .png
     """
+
     # Filter the data for the specified standard deviation (threshold index)
     std_data = df.groupby(['watermark_type', 'mutator']).nth(std_index).reset_index()
-    
+
     # Set seaborn style for better aesthetics
     sns.set(style="whitegrid", font_scale=1.2)
-    
+
     # Create a figure and axis
     plt.figure(figsize=(14, 8))
     ax = plt.gca()
-    
+
     # Get unique mutators and watermark types
     mutators = std_data['mutator'].unique()
     watermark_types = std_data['watermark_type'].unique()
-    
+
     # Define an offset for each watermark type to avoid overlap
     offset = 0.1  # Adjust this value to control the spacing between lines
     x_positions = np.arange(len(mutators))  # Base x-axis positions for mutators
-    
+
+    # Define markers for differentiation
+    marker_styles = {"F1_fin": "o", "F1_min": "s"}  # Circle for F1_fin, Square for F1_min
+
     # Plot F1_fin and F1_min for each watermark type and mutator
     for i, watermark_type in enumerate(watermark_types):
         subset = std_data[std_data['watermark_type'] == watermark_type]
-        
+
         # Calculate offset x-positions for this watermark type
         x_offset = x_positions + (i - len(watermark_types) / 2) * offset
-        
-        # Plot F1_fin and F1_min as connected lines
-        for j, row in subset.iterrows():
-            ax.plot([x_offset[j], x_offset[j]], [row['F1_fin'], row['F1_min']], 
-                    marker='o', markersize=8, label=f'{watermark_type} - {row["mutator"]}')
-    
+
+        # Plot F1_fin and F1_min as connected lines with different markers
+        for j, mutator in enumerate(mutators):
+            row = subset[subset['mutator'] == mutator]
+            if not row.empty:
+                f1_fin = row['F1_fin'].values[0]
+                f1_min = row['F1_min'].values[0]
+
+                ax.plot([x_offset[j], x_offset[j]], [f1_fin, f1_min], color="black", linestyle="--", alpha=0.5)
+                ax.scatter(x_offset[j], f1_fin, marker=marker_styles["F1_fin"], s=100, label=f"{watermark_type} (F1_fin)")
+                ax.scatter(x_offset[j], f1_min, marker=marker_styles["F1_min"], s=100, label=f"{watermark_type} (F1_min)")
+
     # Set x-axis ticks and labels
     ax.set_xticks(x_positions)
     ax.set_xticklabels(mutators, rotation=45, ha='right', fontsize=12)
-    
+
     # Add labels and title
     ax.set_xlabel('Mutator', fontsize=14)
     ax.set_ylabel('F1 Score', fontsize=14)
-    ax.set_title(f'F1_fin and F1_min Scores for Different Watermarking Schemes and Mutators (Threshold Index: {std_index})', 
+    ax.set_title(f'F1_fin and F1_min Scores for Different Watermarking Schemes and Mutators (Threshold = {std_index}σ)', 
                  fontsize=16, pad=20)
-    
-    # Add a legend outside the plot
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True)
-    
+
+    # Simplify legend
+    handles, labels = ax.get_legend_handles_labels()
+    unique_labels = list(dict.fromkeys(labels))  # Remove duplicates while preserving order
+    unique_handles = [handles[labels.index(lab)] for lab in unique_labels]
+    ax.legend(unique_handles, unique_labels, bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True, title="Watermark & Score")
+
     # Adjust layout to prevent overlap
     plt.tight_layout()
 
     # Save the plot
-    plt.savefig(save_path) # saves to png
-    
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
     # Show plot
     plt.show()
+
+def plot_f1_heatmaps(df, threshold_std=2, watermarker_order=None, mutator_order=None, save_path=None):
+    """
+    Generates heatmaps for F1_fin and F1_min at a given threshold (in standard deviations)
+    and optionally saves them to a specified location.
+
+    Parameters:
+    - df: pandas DataFrame containing columns ["watermark_type", "mutator", "threshold", "score_mean", "score_std", "F1_fin", "F1_min"]
+    - threshold_std: The number of standard deviations away from the mean to filter the threshold.
+    - watermarker_order: List of watermarker names in desired order.
+    - mutator_order: List of mutator names in desired order.
+    - save_path: Directory where plots should be saved (if None, plots are only displayed).
+
+    Returns:
+    - Saves the heatmaps as images if `save_path` is provided.
+    - Displays the heatmaps.
+    """
+
+    if watermarker_order is None:
+        watermarker_order = sorted(df["watermark_type"].unique())
+    if mutator_order is None:
+        mutator_order = sorted(df["mutator"].unique())
+
+    # Remove "Mutator" from mutator names
+    df = df.copy()
+    df["mutator"] = df["mutator"].str.replace("Mutator", "", regex=False)
+
+    # Filter the threshold based on the given standard deviation
+    tolerance = 1e-5
+    df_filtered = df[(df["threshold"] - (df["score_mean"] + threshold_std * df["score_std"])).abs() < tolerance]
+
+    # Ensure only one row per (mutator, watermark_type) by averaging F1 scores if duplicates exist
+    df_filtered = df_filtered.groupby(["mutator", "watermark_type"], as_index=False).agg({"F1_fin": "mean", "F1_min": "mean"})
+
+    # Ensure correct categorical ordering
+    df_filtered["watermark_type"] = pd.Categorical(df_filtered["watermark_type"], categories=watermarker_order, ordered=True)
+    df_filtered["mutator"] = pd.Categorical(df_filtered["mutator"], categories=mutator_order, ordered=True)
+
+    # Pivot the data for heatmap plotting
+    df_f1_fin = df_filtered.pivot(index="mutator", columns="watermark_type", values="F1_fin")
+    df_f1_min = df_filtered.pivot(index="mutator", columns="watermark_type", values="F1_min")
+
+    # Ensure save path exists if specified
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+
+    # Plot F1_fin heatmap
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(df_f1_fin, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
+    plt.title(f"F1_fin Heatmap (Threshold = {threshold_std}σ)")
+    plt.xlabel("Watermarker")
+    plt.ylabel("Mutator")
+    if save_path:
+        fin_path = os.path.join(save_path, f"F1_fin_heatmap_{threshold_std}sigma.png")
+        plt.savefig(fin_path, dpi=300, bbox_inches="tight")
+    plt.show()
+
+    # Plot F1_min heatmap
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(df_f1_min, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
+    plt.title(f"F1_min Heatmap (Threshold = {threshold_std}σ)")
+    plt.xlabel("Watermarker")
+    plt.ylabel("Mutator")
+    if save_path:
+        min_path = os.path.join(save_path, f"F1_min_heatmap_{threshold_std}sigma.png")
+        plt.savefig(min_path, dpi=300, bbox_inches="tight")
+    plt.show()
+
+    if save_path:
+        print(f"Saved heatmaps to {save_path}")
 
 if __name__ == "__main__":
 
@@ -307,6 +392,11 @@ if __name__ == "__main__":
     df_formatted.to_csv("./attack/analysis/csv/success_rates_formatted.csv", index=False)
 
     plot_f1_scores(df_formatted)
+    plot_f1_heatmaps(df_formatted, threshold_std=2, 
+                 watermarker_order=["KGW", "SIR", "Adaptive"],
+                 mutator_order=["Word", "EntropyWord", "Span", "Sentence", 
+                                "Document", "Document1Step", "Document2Step"],
+                 save_path="./attack/analysis/figs")
 
     # # Find optimal F1 threshold
     # best_threshold = evaluator.find_optimal_threshold(metric='f1')
