@@ -1,4 +1,7 @@
 import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 class WatermarkMetricsEvaluator:
     def __init__(self, true_labels, watermark_scores):
@@ -134,60 +137,125 @@ class WatermarkMetricsEvaluator:
             'ACC': safe_div(TP + TN, len(self.true_labels))
         }
 
+def process_attack_traces(df):
+    # Drop rows with NaN in 'watermark_score' to avoid issues with idxmin()
+    df = df.dropna(subset=['watermark_score'])
+
+    # Calculate metrics from filtered data
+    df_sorted = df.sort_values(by=['group_id', 'step_num'])
+    
+    # Get original total steps before any filtering
+    if 'original_steps' not in df.columns:
+        total_steps = df_sorted.groupby('group_id')['step_num'].max()
+        df_sorted['original_steps'] = df_sorted['group_id'].map(total_steps)
+    
+    result = df_sorted.groupby('group_id').agg(
+        init_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='first'),
+        min_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='min'),
+        final_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='last'),
+        total_attack_steps=pd.NamedAgg(column='original_steps', aggfunc='first'),
+        min_score_step=pd.NamedAgg(
+            column='watermark_score',
+            aggfunc=lambda x: df_sorted.loc[x.idxmin(), 'step_num'] if not x.isna().all() else np.nan
+        )
+    ).reset_index()
+
+    return result
+
+def format_success_rates(df):
+    # Pivot the dataframe to create separate columns for "fin" and "min" metrics
+    df_pivot = df.pivot_table(
+        index=["watermark_type", "mutator", "threshold", "score_mean", "score_std"],
+        columns="score_type",
+        values=["F1"],
+    )
+
+    # Flatten the MultiIndex in columns
+    df_pivot.columns = [f"{metric}_{stype}" for metric, stype in df_pivot.columns]
+    df_pivot.reset_index(inplace=True)
+
+    return df_pivot
+
+def plot_f1_scores(df, std_index=1, save_path="./attack/analysis/figs/f1_scores.png"):
+    """
+    Plots F1_fin and F1_min scores for different watermarking schemes and mutators using seaborn.
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        std_index (int): The index of the standard deviation threshold to use (default is 2).
+        save_path (str): The path to save the image as .png
+    """
+    # Filter the data for the specified standard deviation (threshold index)
+    std_data = df.groupby(['watermark_type', 'mutator']).nth(std_index).reset_index()
+    
+    # Set seaborn style for better aesthetics
+    sns.set(style="whitegrid", font_scale=1.2)
+    
+    # Create a figure and axis
+    plt.figure(figsize=(14, 8))
+    ax = plt.gca()
+    
+    # Get unique mutators and watermark types
+    mutators = std_data['mutator'].unique()
+    watermark_types = std_data['watermark_type'].unique()
+    
+    # Define an offset for each watermark type to avoid overlap
+    offset = 0.1  # Adjust this value to control the spacing between lines
+    x_positions = np.arange(len(mutators))  # Base x-axis positions for mutators
+    
+    # Plot F1_fin and F1_min for each watermark type and mutator
+    for i, watermark_type in enumerate(watermark_types):
+        subset = std_data[std_data['watermark_type'] == watermark_type]
+        
+        # Calculate offset x-positions for this watermark type
+        x_offset = x_positions + (i - len(watermark_types) / 2) * offset
+        
+        # Plot F1_fin and F1_min as connected lines
+        for j, row in subset.iterrows():
+            ax.plot([x_offset[j], x_offset[j]], [row['F1_fin'], row['F1_min']], 
+                    marker='o', markersize=8, label=f'{watermark_type} - {row["mutator"]}')
+    
+    # Set x-axis ticks and labels
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(mutators, rotation=45, ha='right', fontsize=12)
+    
+    # Add labels and title
+    ax.set_xlabel('Mutator', fontsize=14)
+    ax.set_ylabel('F1 Score', fontsize=14)
+    ax.set_title(f'F1_fin and F1_min Scores for Different Watermarking Schemes and Mutators (Threshold Index: {std_index})', 
+                 fontsize=16, pad=20)
+    
+    # Add a legend outside the plot
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True)
+    
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    # Save the plot
+    plt.savefig(save_path) # saves to png
+    
+    # Show plot
+    plt.show()
+
 if __name__ == "__main__":
 
     # python -m attack.analysis.success_rate_calculator
 
-    # # Initialize with test data
-    # true_labels = [1, 1, 0, 0, 1, 0, 1]
-    # scores = [0.95, 0.87, 0.45, 0.32, 0.78, 0.51, 0.82]
-    # evaluator = WatermarkMetricsEvaluator(true_labels, scores)
-
-    # # Find optimal F1 threshold
-    # best_threshold = evaluator.find_optimal_threshold(metric='f1')
-    # print(f"Optimal F1 threshold: {best_threshold:.2f}")
-
-    # # Find threshold at 10% FPR
-    # fpr_threshold = evaluator.find_threshold_at_fpr(target_fpr=0.1)
-    # print(f"FPR 0.1 threshold: {fpr_threshold:.2f}")
-
-    # # Compare metrics at different thresholds
-    # print("\nMetrics at 0.5 threshold:")
-    # print(evaluator.compute_metrics(0.5))
-
-    # print("\nMetrics at optimal threshold:")
-    # print(evaluator.compute_metrics(best_threshold))
-
     from attack.utils import load_all_csvs
-    import pandas as pd
-
-    def process_attack_traces(df):
-        # Calculate metrics from filtered data
-        df_sorted = df.sort_values(by=['group_id', 'step_num'])
-        
-        # Get original total steps before any filtering
-        if 'original_steps' not in df.columns:
-            total_steps = df_sorted.groupby('group_id')['step_num'].max()
-            df_sorted['original_steps'] = df_sorted['group_id'].map(total_steps)
-        
-        result = df_sorted.groupby('group_id').agg(
-            init_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='first'),
-            min_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='min'),
-            final_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='last'),
-            total_attack_steps=pd.NamedAgg(column='original_steps', aggfunc='first'),
-            min_score_step=pd.NamedAgg(
-                column='watermark_score',
-                aggfunc=lambda x: df_sorted.loc[x.idxmin(), 'step_num']
-            )
-        ).reset_index()
-
-        return result
 
     watermark_types = ["Adaptive", "KGW", "SIR"]
     mutators = ["DocumentMutator", "Document1StepMutator", "Document2StepMutator", 
             "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"]
 
+    unwatermarked_mean_std = {
+        "Adaptive": (49.425769812530945, 3.3846567364055837),
+        "KGW": (-0.8277770841872096, 1.0529608950427352),
+        "SIR": (0.0775412526135454, 0.06861609056292908),
+    }
+
+    results = []
     for watermark_type in watermark_types:
+        score_mean, score_std = unwatermarked_mean_std[watermark_type]
         for mutator in mutators:
             print(f"\n[MAIN] {watermark_type} + {mutator} Results:")
             df = load_all_csvs("./attack/traces/annotated", watermark_type, mutator)
@@ -208,4 +276,49 @@ if __name__ == "__main__":
             print(attack_metrics[['group_id', 'init_watermark_score', 'min_watermark_score', 
                                 'final_watermark_score', 'total_attack_steps',
                                 'min_score_step']].head().to_string(index=False))
-                
+
+            min_scores = attack_metrics['min_watermark_score'].tolist()
+            fin_scores = attack_metrics['final_watermark_score'].tolist()
+            true_labels = [1 for _ in range(len(min_scores))]
+
+            for name, scores in [('min', min_scores), ('fin', fin_scores)]:
+
+                evaluator = WatermarkMetricsEvaluator(true_labels, scores)
+
+                for i in range(4): # to explore 3 standard deviations from mean unwatermarked
+
+                    threshold = score_mean + (i * score_std)
+                    metrics = evaluator.compute_metrics(threshold)
+
+                    results.append({
+                        "watermark_type": watermark_type,
+                        "mutator": mutator,
+                        "score_type": name,
+                        "score_mean": score_mean,
+                        "score_std": score_std,
+                        "threshold": threshold,
+                        **metrics
+                    })
+
+    df = pd.DataFrame(results)
+    df.to_csv("./attack/analysis/csv/success_rates.csv", index=False)
+
+    df_formatted = format_success_rates(df)
+    df_formatted.to_csv("./attack/analysis/csv/success_rates_formatted.csv", index=False)
+
+    plot_f1_scores(df_formatted)
+
+    # # Find optimal F1 threshold
+    # best_threshold = evaluator.find_optimal_threshold(metric='f1')
+    # print(f"Optimal F1 threshold for {name}: {best_threshold:.2f}")
+
+    # # Find threshold at 10% FPR
+    # fpr_threshold = evaluator.find_threshold_at_fpr(target_fpr=0.1)
+    # print(f"FPR 0.1 threshold for {name}: {fpr_threshold:.2f}")
+
+    # # Compare metrics at different thresholds
+    # print(f"\nMetrics at fpr={fpr_threshold} threshold for {name}:")
+    # print(evaluator.compute_metrics(fpr_threshold))
+
+    # print(f"\nMetrics at optimal={best_threshold} threshold for {name}:")
+    # print(evaluator.compute_metrics(best_threshold))    
