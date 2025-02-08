@@ -26,7 +26,7 @@ from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
     ArmoRMOracle,
     OffsetBiasOracle,
-    # DiffOracle
+    DiffOracle
 )
 
 # ---------------------------------------------------------------------
@@ -136,14 +136,14 @@ def load_partitioned_data(watermark, mutator):
 def is_fully_annotated(df):
     """Check if all required columns exist and have no null values."""
     for col in REQUIRED_COLUMNS:
-        if col not in df.columns or df[col].isnull().any():
+        if col not in df.columns:
             return False
     return True
 
 # ---------------------------------------------------------------------
 # Helper: evaluate a specific column
 # ---------------------------------------------------------------------
-def evaluate_column(df, column):
+def evaluate_column(df, column, mutator):
     """
     Compute missing values for a specific column using the corresponding metric.
     Adjust your columns/args as needed depending on your own metrics/oracles.
@@ -176,10 +176,13 @@ def evaluate_column(df, column):
                 model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
                 echo=False,
                 n_gpu_layers=-1,
-                n_ctx=4096*2
+                n_ctx=4096*3
             )
             metric = DiffOracle(llm=llm)
-            df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N=10)
+            N=10
+            if "Word" in mutator:
+                N = 100
+            df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N)
         
         # Clean up
 
@@ -214,18 +217,17 @@ def process_watermark_mutator_group(watermark, mutator):
 
         # Compute each needed column if it's missing or partially missing
         for col in REQUIRED_COLUMNS:
-            if col not in combined_df.columns or combined_df[col].isnull().any():
+            if col not in combined_df.columns:
                 logger.info(f"Computing {col}...")
                 pre_count = len(combined_df)
-                combined_df = evaluate_column(combined_df, col)
+                combined_df = evaluate_column(combined_df, col, mutator)
                 logger.debug(f"{col} computation kept {len(combined_df)}/{pre_count} rows")
                 
         # Check if fully annotated
         if is_fully_annotated(combined_df):
             logger.info(f"Successfully annotated all columns for {watermark}-{mutator}")
         else:
-            missing = [col for col in REQUIRED_COLUMNS 
-                       if col not in combined_df.columns or combined_df[col].isnull().any()]
+            missing = [col for col in REQUIRED_COLUMNS if col not in combined_df.columns]
             logger.warning(f"Still missing after computation: {missing}")
 
         # Save annotated results
@@ -264,12 +266,24 @@ def main():
     # watermark_types = ["SIR"]
     # watermark_types = ["GPT4o_unwatermarked"]
     mutators = [
-        "Document1StepMutator", "Document2StepMutator", # "DocumentMutator", 
+        "Document1StepMutator", "Document2StepMutator", "DocumentMutator", 
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
+    # watermark_types.reverse()
+    # mutators.reverse()
+
     for watermark in watermark_types:
         for mutator in mutators:
+            # skip over incomplete traces
+            if ((watermark == "Adaptive"            and mutator == "EntropyWordMutator") or
+                (watermark == "KGW"                 and mutator == "EntropyWordMutator") or
+                (watermark == "Adaptive"            and mutator == "DocumentMutator") or 
+                (watermark == "GPT4o_unwatermarked" and mutator == "DocumentMutator")
+                ):
+                print(f"Skipping {watermark} + {mutator}")
+                continue
+
             print(f"Processing {watermark} - {mutator}")
             try:
                 process_watermark_mutator_group(watermark, mutator)
@@ -278,6 +292,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0,1 python -m attack.scripts.annotate
+    # CUDA_VISIBLE_DEVICES=2,3 python -m attack.scripts.annotate
 
     main()
