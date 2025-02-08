@@ -322,6 +322,117 @@ def plot_f1_heatmaps(df, threshold_std=2, watermarker_order=None, mutator_order=
     if save_path:
         print(f"Saved heatmaps to {save_path}")
 
+def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
+    """
+    Plots separate line plots for each watermarking scheme, showing F1_fin and F1_min scores 
+    against the number of standard deviations (0,1,2,3), with unique line styles and markers per mutator.
+    
+    F1_fin is always solid, and F1_min is always dotted. Lines are smoothed using cubic interpolation.
+    All plots have the same Y-axis range from 0 to 1 for consistency.
+
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        save_path_base (str): The base path to save the images as .png (each watermark type will have its own file).
+    """
+    import scipy.interpolate
+
+    # Remove "Mutator" from mutator names
+    df = df.copy()
+    df["mutator"] = df["mutator"].str.replace("Mutator", "", regex=False)
+
+    # Define desired mutator order
+    mutator_order = ["Word", "EntropyWord", "Span", "Sentence", "Document", "Document1Step", "Document2Step"]
+    
+    # Calculate standard deviation levels (0,1,2,3) based on thresholds
+    df["std_level"] = df.groupby(["watermark_type", "mutator"]).cumcount()
+
+    # Define darker color palettes for each watermark type
+    watermark_palette = {
+        "Adaptive": sns.color_palette("Blues_r", len(mutator_order)),  # _r => Reverse for better visibility
+        "SIR": sns.color_palette("Reds_r", len(mutator_order)),
+        "KGW": sns.color_palette("Greens_r", len(mutator_order)),
+    }
+
+    # Define unique markers for each mutator
+    marker_styles = ["o", "s", "D", "^", "v", "X", "*"]
+
+    # Set seaborn style
+    sns.set(style="whitegrid", font_scale=1.2)
+
+    # Generate separate plots for each watermark type
+    for watermark_type in ["Adaptive", "SIR", "KGW"]:
+        if watermark_type not in df["watermark_type"].unique():
+            continue  # Skip if the watermark type is not present in the data
+
+        plt.figure(figsize=(12, 8))
+        ax = plt.gca()
+
+        # Get subset of data for the specific watermark type
+        subset_df = df[df["watermark_type"] == watermark_type]
+
+        # Assign colors and markers to mutators based on predefined order
+        available_mutators = [m for m in mutator_order if m in subset_df["mutator"].unique()]
+        color_map = {mutator: color for mutator, color in zip(available_mutators, watermark_palette[watermark_type])}
+        marker_map = {mutator: marker_styles[i % len(marker_styles)] for i, mutator in enumerate(available_mutators)}
+
+        # Plot each mutator separately with its assigned color, solid/dotted lines, and markers
+        for mutator in available_mutators:
+            subset = subset_df[subset_df["mutator"] == mutator]
+            color = color_map[mutator]
+            marker = marker_map[mutator]
+
+            # Interpolation for smoothing
+            if len(subset) > 3:  # Ensure enough points for cubic interpolation
+                x_new = np.linspace(subset["std_level"].min(), subset["std_level"].max(), 100)
+                f1_fin_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["F1_fin"], kind="cubic")
+                f1_min_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["F1_min"], kind="cubic")
+                
+                # Plot smoothed F1_fin (solid)
+                ax.plot(x_new, f1_fin_smooth(x_new), label=f"{mutator}", color=color, linestyle="-", linewidth=2)
+
+                # Plot smoothed F1_min (dotted)
+                ax.plot(x_new, f1_min_smooth(x_new), color=color, linestyle=":", linewidth=2)
+
+            else:
+                # Plot regular lines if not enough points for smoothing
+                ax.plot(subset["std_level"], subset["F1_fin"], label=f"{mutator}", color=color, linestyle="-", linewidth=2)
+                ax.plot(subset["std_level"], subset["F1_min"], color=color, linestyle=":", linewidth=2)
+
+            # Add markers to original points for visibility
+            ax.scatter(subset["std_level"], subset["F1_fin"], color=color, marker=marker, s=80)
+            ax.scatter(subset["std_level"], subset["F1_min"], color=color, marker=marker, s=80, alpha=0.8)
+
+        # Axis labels and title
+        ax.set_xlabel("Standard Deviations from Mean", fontsize=14)
+        ax.set_ylabel("F1 Score", fontsize=14)
+        ax.set_title(f"F1 Scores for {watermark_type} Watermark", fontsize=16, pad=20)
+
+        # Set Y-axis limits to ensure all plots are on the same scale
+        ax.set_ylim(-0.02, 1.02)
+
+        # Customize x-ticks
+        ax.set_xticks([0, 1, 2, 3])
+        ax.set_xticklabels(["0σ", "1σ", "2σ", "3σ"])
+
+        # Set legend to enforce mutator order while skipping missing ones
+        handles, labels = ax.get_legend_handles_labels()
+        legend_dict = {mutator: handles[labels.index(mutator)] for mutator in mutator_order if mutator in labels}
+        ax.legend(legend_dict.values(), legend_dict.keys(), title="Mutator", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True)
+
+        # Adjust layout to prevent overlap
+        plt.tight_layout()
+
+        # Save the plot
+        save_path_for_watermark = f"{save_path_base}/f1_lineplot_{watermark_type}.png"
+        plt.savefig(save_path_for_watermark, dpi=300, bbox_inches="tight")
+
+        # Show plot
+        plt.show()
+
+    if save_path_base:
+        print(f"Saved line plots to {save_path_base}")
+
+
 if __name__ == "__main__":
 
     # python -m attack.analysis.success_rate_calculator
@@ -397,6 +508,9 @@ if __name__ == "__main__":
                  mutator_order=["Word", "EntropyWord", "Span", "Sentence", 
                                 "Document", "Document1Step", "Document2Step"],
                  save_path="./attack/analysis/figs")
+
+    # Execute the function with the given dataset
+    plot_f1_lineplot(df_formatted, save_path_base="./attack/analysis/figs")
 
     # # Find optimal F1 threshold
     # best_threshold = evaluator.find_optimal_threshold(metric='f1')
