@@ -141,6 +141,14 @@ def split_to_parts(df, length_of_df):
     return split_dfs
 
 def evaluate(distinguisher, parts, prefix, length_of_df, subsample):
+    """
+    Given a distinguisher and a list of parts, evaluate the distinguisher on each part.
+    Parts should be a list of dataframes.
+    Each part is defined by a 4-tuple (oracle, watermark type, mutator, prompt type).
+    Each part is itself a list of attack traces. Here we use 30 per part, (10 entropy levels, 3 per).
+    Within each entropy level, each pair is distinguished i.e. A1 against (A1, A2) and (A1, A3), etc.
+    This gives 60 experiments per part.
+    """
     total_len = 0
     for i, part in enumerate(parts):
         log.info(f"Processing part {i+1}/{len(parts)}")
