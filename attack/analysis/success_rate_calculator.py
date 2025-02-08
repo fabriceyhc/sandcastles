@@ -328,13 +328,14 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
     against the number of standard deviations (0,1,2,3), with unique line styles and markers per mutator.
     
     F1_fin is always solid, and F1_min is always dotted. Lines are smoothed using cubic interpolation.
-    All plots have the same Y-axis range from 0 to 1 for consistency.
+    All plots have the same Y-axis range from 0 to 1 for consistency. Markers are added to the legend.
 
     Parameters:
         df (pd.DataFrame): The DataFrame containing the data.
         save_path_base (str): The base path to save the images as .png (each watermark type will have its own file).
     """
     import scipy.interpolate
+    import matplotlib.lines as mlines
 
     # Remove "Mutator" from mutator names
     df = df.copy()
@@ -375,6 +376,8 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
         color_map = {mutator: color for mutator, color in zip(available_mutators, watermark_palette[watermark_type])}
         marker_map = {mutator: marker_styles[i % len(marker_styles)] for i, mutator in enumerate(available_mutators)}
 
+        legend_handles = []  # Store legend entries
+
         # Plot each mutator separately with its assigned color, solid/dotted lines, and markers
         for mutator in available_mutators:
             subset = subset_df[subset_df["mutator"] == mutator]
@@ -388,19 +391,22 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
                 f1_min_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["F1_min"], kind="cubic")
                 
                 # Plot smoothed F1_fin (solid)
-                ax.plot(x_new, f1_fin_smooth(x_new), label=f"{mutator}", color=color, linestyle="-", linewidth=2)
+                ax.plot(x_new, f1_fin_smooth(x_new), color=color, linestyle="-", linewidth=2)
 
                 # Plot smoothed F1_min (dotted)
                 ax.plot(x_new, f1_min_smooth(x_new), color=color, linestyle=":", linewidth=2)
 
             else:
                 # Plot regular lines if not enough points for smoothing
-                ax.plot(subset["std_level"], subset["F1_fin"], label=f"{mutator}", color=color, linestyle="-", linewidth=2)
+                ax.plot(subset["std_level"], subset["F1_fin"], color=color, linestyle="-", linewidth=2)
                 ax.plot(subset["std_level"], subset["F1_min"], color=color, linestyle=":", linewidth=2)
 
             # Add markers to original points for visibility
             ax.scatter(subset["std_level"], subset["F1_fin"], color=color, marker=marker, s=80)
             ax.scatter(subset["std_level"], subset["F1_min"], color=color, marker=marker, s=80, alpha=0.8)
+
+            # Add entry to legend with both marker and line
+            legend_handles.append(mlines.Line2D([], [], color=color, marker=marker, linestyle="-", markersize=8, label=mutator))
 
         # Axis labels and title
         ax.set_xlabel("Standard Deviations from Mean", fontsize=14)
@@ -415,9 +421,7 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
         ax.set_xticklabels(["0σ", "1σ", "2σ", "3σ"])
 
         # Set legend to enforce mutator order while skipping missing ones
-        handles, labels = ax.get_legend_handles_labels()
-        legend_dict = {mutator: handles[labels.index(mutator)] for mutator in mutator_order if mutator in labels}
-        ax.legend(legend_dict.values(), legend_dict.keys(), title="Mutator", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True)
+        ax.legend(handles=legend_handles, title="Mutator", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12, frameon=True)
 
         # Adjust layout to prevent overlap
         plt.tight_layout()
