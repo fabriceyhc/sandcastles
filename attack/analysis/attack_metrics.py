@@ -49,7 +49,7 @@ def get_mean_change_in_z_scores(df, watermark_threshold=0.0):
     quality_preserved_df = quality_preserved_df.sort_values(by='step_num')
     z_score_changes = []
     for group_id, group_df in quality_preserved_df.groupby('group_id'):
-        first_success_idx = group_df[group_df['watermark_score'] < watermark_threshold].index.min()
+        first_success_idx = group_df[(group_df['watermark_score'] < watermark_threshold) & (df['watermark_score'] != 0)].index.min()
         if pd.notna(first_success_idx):
             group_df = group_df.loc[:first_success_idx]  # Consider only steps before the threshold
         else:
@@ -147,4 +147,4 @@ if __name__ == "__main__":
                 # Move legend outside the plot
                 axsl[i].legend(loc="upper left", bbox_to_anchor=(1.05, 1))
         fig.subplots_adjust(right=0.8, wspace=0.8, hspace=0.3)
-        fig.savefig(f"./attack/{watermarker}.png")
+        fig.savefig(f"./attack/analysis/figs/{watermarker}.png")
