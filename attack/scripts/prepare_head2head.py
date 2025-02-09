@@ -9,7 +9,6 @@ def process_dataframe(df, oracle):
     results = []
     
     for group_id, group in df.groupby("group_id"):
-        
 
         first_row = group.loc[group["step_num"] == 0].head(1)
         final_row = group.loc[group["quality_preserved"] == True].tail(1)
@@ -40,6 +39,7 @@ def process_dataframe(df, oracle):
             "prompt": prompt,
             "initial_text": initial_text,
             "attacked_text": attacked_text,
+            "mutation_num": mutation_num, 
             f"initial_{oracle}_score": initial_score,
             f"attacked_{oracle}_score": attacked_score
         })
@@ -58,12 +58,14 @@ if __name__ == "__main__":
     m = "SentenceMutator"
             
     internlm_trace_df   = load_all_csvs("./attack/traces/annotated", w, m, "InternLMOracle")
-    difforacle_trace_df = load_all_csvs("./attack/traces", w, m, "DiffOracle")
+    difforacle_trace_df = load_all_csvs("./attack/traces/annotated", w, m, "DiffOracle")
     print(f"Original InternLM + {w} + {m} attack trace: {internlm_trace_df.shape}")
     print(f"Original DiffOracle + {w} + {m} attack trace: {difforacle_trace_df.shape}")
     
-    internlm_trace_df = process_dataframe(internlm_trace_df, "InternLMOracle").iloc[::]
+    internlm_trace_df = process_dataframe(internlm_trace_df, "InternLMOracle")
     difforacle_trace_df = process_dataframe(difforacle_trace_df, "DiffOracle")
+    internlm_trace_df["oracle"] = ["InternLMOracle"] * len(internlm_trace_df)
+    difforacle_trace_df["oracle"] = ["DiffOracle"] * len(difforacle_trace_df)
     print(f"Trimmed InternLM + {w} + {m} attack pairs: {internlm_trace_df.shape}")
     print(f"Trimmed DiffOracle + {w} + {m} attack pairs: {difforacle_trace_df.shape}")
 
