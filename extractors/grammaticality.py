@@ -1,10 +1,13 @@
-import language_tool_python
+import pandas as pd
 import numpy as np
+import language_tool_python
+from tqdm import tqdm
+tqdm.pandas()  # Initialize tqdm for pandas
 
 class GrammarMetric:
     def __init__(self) -> None:
         """
-        Use language_tool_python to check grammer.
+        Use language_tool_python to check grammar.
         :Package Requirements:
             * pip install language_tool_python
         :Language: english
@@ -29,9 +32,10 @@ class GrammarMetric:
         :param df: pandas DataFrame containing the text data.
         :param text_column: the name of the column containing the text to evaluate.
         :param new_column: the name of the new column to store the results.
+        :param early: if True, only evaluate the first 50 words of each text.
         :return: DataFrame with new column containing grammar issue counts.
         """
-        df[new_column] = df[text_column].apply(lambda text: len(self.find_grammar_issues(text, early=early)))
+        df[new_column] = df[text_column].progress_apply(lambda text: len(self.find_grammar_issues(text, early=early)))
         return df
     
 

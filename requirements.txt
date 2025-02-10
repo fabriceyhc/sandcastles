@@ -7,3 +7,5 @@ python-dotenv
 einops
 h5py
 seaborn
+language_tool_python
+evaluate
