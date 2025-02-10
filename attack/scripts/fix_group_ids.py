@@ -8,9 +8,9 @@ def assign_unique_group_ids(df):
     df = df.drop(columns=['new_group'])
     return df
 
-def load_partitioned_data(base_dir, watermark_str, mutator_str):
+def load_partitioned_data(base_dir, watermark_str, mutator_str, oracle_str):
     """Load all CSV parts with tracking of original file paths"""
-    pattern = os.path.join(base_dir, f"*{watermark_str}_{mutator_str}*")
+    pattern = os.path.join(base_dir, f"{oracle_str}_{watermark_str}_{mutator_str}*")
     csv_files = glob.glob(pattern)
     csv_files.sort()
 
@@ -44,10 +44,10 @@ def compute_new_column(combined_df):
     
     return combined_df
 
-def process_partitions(base_dir, watermark_str, mutator_str):
+def process_partitions(base_dir, watermark_str, mutator_str, oracle_str):
     """Main processing pipeline"""
     # Load data with original path tracking
-    combined_df = load_partitioned_data(base_dir, watermark_str, mutator_str)
+    combined_df = load_partitioned_data(base_dir, watermark_str, mutator_str, oracle_str)
     
     if combined_df.empty:
         print("No matching files found")
@@ -66,7 +66,10 @@ if __name__ == "__main__":
 
     # python -m attack.scripts.fix_group_ids
 
-    from attack.utils import load_all_csvs
+    oracles = [
+        "DiffOracle",
+        "InternLMOracle"
+    ]
 
     watermark_types = [
         "Adaptive",
@@ -85,11 +88,13 @@ if __name__ == "__main__":
         "EntropyWordMutator",
     ]
 
-    for watermark_type in watermark_types:
-        
-        for mutator in mutators:
+    for oracle in oracles:
 
-            print(f"[MAIN] Processing {watermark_type} + {mutator}")
+        for watermark_type in watermark_types:
+            
+            for mutator in mutators:
 
-            process_partitions("./attack/traces", watermark_type, mutator)
-            process_partitions("./attack/traces/annotated", watermark_type, mutator)
+                print(f"[MAIN] Processing {watermark_type} + {mutator}")
+
+                # process_partitions("./attack/traces", watermark_type, mutator, oracle)
+                process_partitions("./attack/traces/annotated", watermark_type, mutator, oracle)

@@ -409,7 +409,7 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
             legend_handles.append(mlines.Line2D([], [], color=color, marker=marker, linestyle="-", markersize=8, label=mutator))
 
         # Axis labels and title
-        ax.set_xlabel("Standard Deviations from Mean", fontsize=14)
+        ax.set_xlabel("Standard Deviations from Unwatermarked Mean", fontsize=14)
         ax.set_ylabel("F1 Score", fontsize=14)
         ax.set_title(f"F1 Scores for {watermark_type} Watermark", fontsize=16, pad=20)
 

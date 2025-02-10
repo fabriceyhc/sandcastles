@@ -10,17 +10,6 @@ from guidance import models
 
 # ---------------------------------------------------------------------
 # Additional imports from your original environment
-# (assuming they exist in your codebase)
-# ---------------------------------------------------------------------
-import shutil
-import torch
-import re
-import logging
-from guidance import models 
-
-# ---------------------------------------------------------------------
-# Additional imports from your original environment
-# (assuming they exist in your codebase)
 # ---------------------------------------------------------------------
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
 from attack.oracles import (
@@ -39,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Constants and required columns
 # ---------------------------------------------------------------------
 REQUIRED_COLUMNS = [
-    "difforacle_quality", "armolm_quality", "offsetbias_quality", 
+    "armolm_quality", "offsetbias_quality", "difforacle_quality",
     "words_edited", "perplexity", "grammar_errors",
 ] 
 
@@ -68,15 +57,16 @@ def parse_filename(path):
 # ---------------------------------------------------------------------
 def assign_crossfile_group_ids(combined_df):
     """
-    Assign group IDs that work across multiple files using step_num sequence.
-    In this example, we assume step_num == -1 indicates a new group start.
-    You can adjust as needed.
+    Compute a group ID for rows across files.
+    We assume that step_num == -1 indicates the start of a new group.
+    
+    NOTE: The original code re-sorted the dataframe after computing group_id,
+    which inadvertently reorders rows from their original (file) order.
+    Removing that sort preserves the correct group order.
     """
-    # combined_df = combined_df.sort_values(by=["step_num", "__filepath__"])
     combined_df['new_group'] = (combined_df['step_num'] == -1).astype(int)
     combined_df['group_id'] = combined_df['new_group'].cumsum()
-    combined_df = combined_df.drop(columns=['new_group'])
-    combined_df = combined_df.sort_values(by=["group_id", "step_num"])
+    combined_df.drop(columns=['new_group'], inplace=True)
     return combined_df
 
 # ---------------------------------------------------------------------
@@ -94,11 +84,18 @@ def load_partitioned_data(watermark, mutator):
     logger.debug(f"- Source: {source_dir} -> Found: {len(source_files)}")
     logger.debug(f"- Annotated: {annotated_dir} -> Found: {len(annotated_files)}")
 
+    # Combine file lists
     all_files = source_files + annotated_files
     if not all_files:
         logger.warning(f"No files found for {watermark}-{mutator}")
         return None, []
-
+    
+    # **** FIX: Sort files by the part number so that they load in the correct order ****
+    all_files = sorted(
+        all_files,
+        key=lambda f: parse_filename(f)['part_num'] if parse_filename(f) is not None else 0
+    )
+    
     dfs = []
     valid_files = []
     required_columns = ["step_num", "current_text", "mutated_text"]
@@ -125,7 +122,7 @@ def load_partitioned_data(watermark, mutator):
         return None, []
     
     combined_df = pd.concat(dfs, ignore_index=True)
-    # IMPORTANT: Assign cross-file group IDs here
+    # IMPORTANT: Assign cross-file group IDs here (without re-sorting)
     combined_df = assign_crossfile_group_ids(combined_df)
 
     return combined_df, valid_files
@@ -146,7 +143,6 @@ def is_fully_annotated(df):
 def evaluate_column(df, column, mutator):
     """
     Compute missing values for a specific column using the corresponding metric.
-    Adjust your columns/args as needed depending on your own metrics/oracles.
     """
     metric = None
     try:
@@ -179,13 +175,12 @@ def evaluate_column(df, column, mutator):
                 n_ctx=4096*3
             )
             metric = DiffOracle(llm=llm)
-            N=10
+            N = 10
             if "Word" in mutator:
                 N = 100
             df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N)
         
         # Clean up
-
         del metric
         torch.cuda.empty_cache()
     except Exception as e:
@@ -204,9 +199,6 @@ def process_watermark_mutator_group(watermark, mutator):
     logger.info(f"Processing {watermark}-{mutator} | {len(combined_df)} rows from {len(source_files)} files")
     
     try:
-        # Now that we have group_id, we can safely sort
-        combined_df = combined_df.sort_values(["group_id", "step_num"])
-
         # Fill mutated_text if missing
         combined_df["mutated_text"] = combined_df["mutated_text"].fillna(combined_df["current_text"])
         
@@ -215,7 +207,7 @@ def process_watermark_mutator_group(watermark, mutator):
         if initial_missing:
             logger.info(f"Missing columns to compute: {initial_missing}")
 
-        # Compute each needed column if it's missing or partially missing
+        # Compute each needed column if missing or partially missing
         for col in REQUIRED_COLUMNS:
             if col not in combined_df.columns:
                 logger.info(f"Computing {col}...")
@@ -240,11 +232,10 @@ def process_watermark_mutator_group(watermark, mutator):
             
             dest_path = os.path.join(annotated_dir, os.path.basename(orig_path))
             
-            # Move or overwrite the CSV
+            # Write out the CSV file (overwriting if needed)
             part_df.to_csv(dest_path, index=False)
             
-            # If the source was in the ./attack/traces (not the annotated one),
-            # we can remove the old file to avoid duplicates.
+            # Remove the old file if it wasn’t already in the annotated folder
             if orig_path != dest_path and os.path.exists(orig_path):
                 os.remove(orig_path)
 
@@ -258,13 +249,7 @@ def process_watermark_mutator_group(watermark, mutator):
 # Main entry point
 # ---------------------------------------------------------------------
 def main():
-    # Example usage: CUDA_VISIBLE_DEVICES=0,1 python -m attack.scripts.annotate
-    # You can adjust the watermark_types and mutators lists as needed
-    watermark_types = ["Adaptive", "KGW", "SIR", "GPT4o_unwatermarked"]  # "SIR", etc.
-    # watermark_types = ["Adaptive"]
-    # watermark_types = ["KGW"]
-    # watermark_types = ["SIR"]
-    # watermark_types = ["GPT4o_unwatermarked"]
+    watermark_types = ["Adaptive", "KGW", "SIR", "GPT4o_unwatermarked"]
     mutators = [
         "Document1StepMutator", "Document2StepMutator", "DocumentMutator", 
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
@@ -275,7 +260,7 @@ def main():
 
     for watermark in watermark_types:
         for mutator in mutators:
-            # skip over incomplete traces
+            # Skip over incomplete traces
             if ((watermark == "Adaptive"            and mutator == "EntropyWordMutator") or
                 (watermark == "KGW"                 and mutator == "EntropyWordMutator") or
                 (watermark == "Adaptive"            and mutator == "DocumentMutator") or 
