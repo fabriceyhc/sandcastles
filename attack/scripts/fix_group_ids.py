@@ -72,20 +72,20 @@ if __name__ == "__main__":
     ]
 
     watermark_types = [
-        "Adaptive",
-        "KGW",
+        # "Adaptive",
+        # "KGW",
         "SIR",
-        "GPT4o_unwatermarked",
+        # "GPT4o_unwatermarked",
     ]
 
     mutators = [
-        "DocumentMutator",
-        "Document1StepMutator",
-        "Document2StepMutator",
+        # "DocumentMutator",
+        # "Document1StepMutator",
+        # "Document2StepMutator",
         "SentenceMutator",
-        "SpanMutator",
-        "WordMutator",
-        "EntropyWordMutator",
+        # "SpanMutator",
+        # "WordMutator",
+        # "EntropyWordMutator",
     ]
 
     for oracle in oracles:

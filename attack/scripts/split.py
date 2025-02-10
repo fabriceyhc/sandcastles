@@ -3,7 +3,7 @@ import os
 
 def split_csv_by_approx_size(
     input_csv_path, 
-    max_bytes=90 * 1024 * 1024,  # 50 MB
+    max_bytes=50 * 1024 * 1024,  # 50 MB
     small_chunk_rows=1000
 ):
     """
@@ -86,9 +86,9 @@ if __name__ == "__main__":
 
     import glob
 
-    traces = glob.glob("./attack/traces/annotated/*")
+    traces = glob.glob("./attack/traces/*")
 
-    traces = [trace for trace in traces if "KGW" in trace and "Entropy" in trace]
+    traces = [trace for trace in traces if "Adaptive" in trace and "DocumentMutator" in trace]
     
     for trace in traces:
         chunk_paths = split_csv_by_approx_size(trace)
