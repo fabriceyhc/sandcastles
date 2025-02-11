@@ -4,6 +4,7 @@ from itertools import combinations
 from dotenv import load_dotenv, find_dotenv
 from guidance import models
 from attack.utils import load_all_csvs
+from collections import defaultdict
 
 def extract_unique_column_value(df, column_name):
     """
@@ -30,13 +31,14 @@ def extract_unique_column_value(df, column_name):
         unique_values = df[column_name].unique()
         raise Exception(f"Column '{column_name}' contains {unique_count} unique values: {unique_values}")
 
+# TODO: remove this function
 def split_dataframe(df, chunk_size):
     assert len(df) % chunk_size == 0, "Dataframe length must be divisible by chunk size"
     return [df.iloc[i:i + chunk_size].copy() for i in range(0, len(df), chunk_size)]
 
-def get_id_tuples(num=10):
+def get_id_tuples(df, groups=10):
     """
-    Generates unique pairs of numbers within groups of three from 1 to `num`.
+    Generates unique pairs of numbers within entropy groups.
     Each pair is annotated with the group number it belongs to.
 
     Parameters:
@@ -46,19 +48,11 @@ def get_id_tuples(num=10):
     list of tuples: Each tuple contains two numbers forming a pair and the group number.
     """
     # Initialize an empty list to store the pairs
-    pairs = []
-    
-    # Use enumerate to keep track of the group number, starting at 0
-    for group_num, start in enumerate(range(0, num, 3), start=1):
-        # Define the current group of three numbers
-        group = range(start, start + 3)
-        
-        # Generate all unique pairs within the group
-        for pair in combinations(group, 2):
-            # Check if the second number in the pair does not exceed 'num'
-            if pair[1] <= num:
-                # Append the pair along with the group number to the list
-                pairs.append((*pair, group_num))
+    pairs = defaultdict(list)
+    for entropy in range(1, groups + 1):
+        group = df[df['entropy'] == entropy]
+        for pair in combinations(group['attack_num'].unique(), 2):
+            pairs[entropy].append(pair)
     
     return pairs
 
@@ -236,6 +230,14 @@ def get_model(model_name):
         llm = models.OpenAI(model_name)
 
     return llm, distinguisher_persona
+
+def prompt_to_type(prompt):
+    if "story" in prompt:
+        return "paris"
+    elif "essay" in prompt:
+        return "space"
+    elif "news" in prompt:
+        return "news"
 
 def prompt_to_entropy(prompt):
     if "story" in prompt:

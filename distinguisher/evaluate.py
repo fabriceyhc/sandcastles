@@ -1,7 +1,8 @@
 # ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
 
 from distinguisher.models import (SimpleDistinguisher, AggressiveSimple, SimpleGPT, SimplestGPT, LogicGPT, LogicSimple, LogicSimplest)
-from distinguisher.utils import get_attack_traces, extract_unique_column_value, get_id_tuples, split_dataframe, get_model
+from distinguisher.utils import get_attack_traces, extract_unique_column_value, get_id_tuples, get_model, prompt_to_entropy, prompt_to_type
+from itertools import combinations
 import pandas as pd
 import os
 import datasets
@@ -30,16 +31,16 @@ class AttackParser():
                 assert row['step_num'] == -1, "First row is not step -1"
                 continue  # Skip the first row
 
-            # Check current_text matches mutated_text from the previous row
-            prev_row = df.loc[i-1]
-            if row['current_text'] != prev_row['mutated_text']:
-                log.error(f"Row {i} current_text mismatch. Current: {row.to_dict()}, Previous: {prev_row.to_dict()}")
-                assert row['current_text'] == prev_row['mutated_text'], f"Row {i} does not match previous row"
+            # # Check current_text matches mutated_text from the previous row
+            # prev_row = df.loc[i-1]
+            # if row['current_text'] != prev_row['mutated_text']:
+            #     log.error(f"Row {i} current_text mismatch. Current: {row['step_num']}, Previous: {prev_row['step_num']}")
+            #     assert row['current_text'] == prev_row['mutated_text'], f"Row {i} does not match previous row"
 
-            # Check row index matches mutation_num
-            if (i - 1) != row['mutation_num']:
-                log.error(f"Row {i} mutation_num mismatch. Current: {row.to_dict()}, Previous: {prev_row.to_dict()}")
-                assert i == row['mutation_num'], f"Row {i} does not match mutation_num"
+            # # Check row index matches mutation_num
+            # if (i - 1) != row['mutation_num']:
+            #     log.error(f"Row {i} mutation_num mismatch. Current: {row['step_num']}, Previous: {prev_row['step_num']}")
+            #     assert i == row['mutation_num'], f"Row {i} does not match mutation_num"
                 
         self.prompt = df.loc[0, 'prompt']
         self.response = df.loc[0, 'current_text']
@@ -57,11 +58,11 @@ class AttackParser():
     def get_nth(self, n):
         return self.df[n]
 
-def distinguish_attacks(sd, df, length_of_df, prefix, subsample):
+def distinguish_attacks(sd, df, prefix, subsample, groups=10):
     o_str = extract_unique_column_value(df, "o_str")
     m_str = extract_unique_column_value(df, "m_str")
     w_str = extract_unique_column_value(df, "w_str")
-    if m_str in ["DocumentMutator", "Document1StepMutator", "Document2StepMutator"]:
+    if m_str in ["DocumentMutator"]:
         subsample = max(subsample//2, 1)
     if m_str == "SentenceMutator":
         subsample *= 3
@@ -70,7 +71,7 @@ def distinguish_attacks(sd, df, length_of_df, prefix, subsample):
     if m_str in ["WordMutator", "EntropyWordMutator"]:
         subsample *= 20
     prompt_type = extract_unique_column_value(df, "prompt_type")
-    ids = get_id_tuples(length_of_df)
+    ids = get_id_tuples(df, groups)
 
     output_path=f"distinguisher/results/{prefix}_{o_str}_{w_str}_{m_str}_{prompt_type}_{sd.__class__.__name__}.csv"
 
@@ -85,62 +86,70 @@ def distinguish_attacks(sd, df, length_of_df, prefix, subsample):
         return
 
     distinguish_count = 0
+    tot_pairs = 0
 
-    for i, (attack1_id, attack2_id, entropy) in enumerate(ids):
-        origins = {
-            'A': AttackParser(None, df.iloc[attack1_id]['attack_data']),
-            'B': AttackParser(None, df.iloc[attack2_id]['attack_data'])
-        }
-        if sd is not None:
-            sd.set_origin(origins['A'].get_response(), origins['B'].get_response())
-            log.info(f"Processing attack pair {i+1}/{len(ids)}")
-        for origin, attack in origins.items():
-            dataset = []
-            for n in range(len(attack)):
-                dataset.append({
-                    "P": attack.get_nth(n),
-                    "Num": n,
-                    "Origin": origin,
-                })
-            # dataset = dataset[-5:] # TODO: Remove this line when running on full dataset
-            dataset = dataset[::subsample]
+    for entropy in range(1, groups+1):
+        pairs = ids[entropy]
+        tot_pairs += len(pairs)
+        if len(pairs) == 0:
+            log.warning(f"Entropy level {entropy}: no pairs found")
+            continue
+        if len(pairs) == 1:
+            log.warning(f"Entropy level {entropy}: only one pair found")
+            continue
+        for i, (attack1_id, attack2_id) in enumerate(pairs):
+            origins = {
+                'A': AttackParser(None, df[df['attack_num'] == attack1_id].iloc[0]['attack_data']),
+                'B': AttackParser(None, df[df['attack_num'] == attack2_id].iloc[0]['attack_data'])
+            }
+            if sd is not None:
+                sd.set_origin(origins['A'].get_response(), origins['B'].get_response())
+                log.info(f"Processing attack pair {i+1}/{len(pairs)}")
+            for origin, attack in origins.items():
+                dataset = []
+                for n in range(len(attack)):
+                    dataset.append({
+                        "P": attack.get_nth(n),
+                        "Num": n,
+                        "Origin": origin,
+                    })
+                # dataset = dataset[-5:] # TODO: Remove this line when running on full dataset
+                dataset = dataset[::subsample]
 
-            if sd is None:
+                if sd is None:
+                    distinguish_count += len(dataset)
+                    continue
+                log.info(f"Counter: {distinguish_count}")
                 distinguish_count += len(dataset)
-                continue
-            log.info(f"Counter: {distinguish_count}")
-            distinguish_count += len(dataset)
-            dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
-            dataset = sd.distinguish(dataset).to_pandas()
-            dataset["prompt"] = attack.get_prompt()
-            dataset["o_str"] = o_str
-            dataset["w_str"] = w_str
-            dataset["m_str"] = m_str
-            dataset["prompt_type"] = prompt_type
-            dataset["entropy"] = entropy
-            dataset["attack1_id"] = attack1_id
-            dataset["attack2_id"] = attack2_id
-            dataset["origin_A"] = ""
-            dataset["origin_B"] = ""
-            dataset.iloc[0, dataset.columns.get_loc("origin_A")] = origins['A'].get_response()
-            dataset.iloc[0, dataset.columns.get_loc("origin_B")] = origins['B'].get_response()
-            dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
+                dataset = datasets.Dataset.from_pandas(pd.DataFrame(data=dataset))
+                dataset = sd.distinguish(dataset).to_pandas()
+                dataset["prompt"] = attack.get_prompt()
+                dataset["o_str"] = o_str
+                dataset["w_str"] = w_str
+                dataset["m_str"] = m_str
+                dataset["prompt_type"] = prompt_type
+                dataset["entropy"] = entropy
+                dataset["attack1_id"] = attack1_id
+                dataset["attack2_id"] = attack2_id
+                dataset["origin_A"] = ""
+                dataset["origin_B"] = ""
+                dataset.iloc[0, dataset.columns.get_loc("origin_A")] = origins['A'].get_response()
+                dataset.iloc[0, dataset.columns.get_loc("origin_B")] = origins['B'].get_response()
+                dataset.to_csv(output_path, mode='a', header=not os.path.exists(output_path), index=False)
     log.info(f"Finished Counter: {distinguish_count}")
-    return distinguish_count
+    return distinguish_count, tot_pairs
 
 # Need to adjust for different datasets
-def split_to_parts(df, length_of_df):
-    split_dfs = split_dataframe(df, length_of_df)
-    assert len(split_dfs) == 3, f"Expected 3 splits, got {len(split_dfs)}"
-
-    # Add "prompt_type" column to each split
-    split_dfs[0]['prompt_type'] = 'paris'
-    split_dfs[1]['prompt_type'] = 'space'
-    split_dfs[2]['prompt_type'] = 'news'
-
+def split_to_parts(df):
+    df['prompt_type'] = df['attack_data'].apply(lambda x: prompt_to_type(x['prompt'].values[0]))
+    df['entropy'] = df['attack_data'].apply(lambda x: prompt_to_entropy(x['prompt'].values[0]))
+    # split dfs based on prompt type
+    unique_types = df['prompt_type'].unique()
+    split_dfs = [df[df['prompt_type'] == t] for t in unique_types]
+    # assert len(split_dfs) == 3, f"Expected 3 splits, got {len(split_dfs)}"
     return split_dfs
 
-def evaluate(distinguisher, parts, prefix, length_of_df, subsample):
+def evaluate(distinguisher, parts, prefix, subsample):
     """
     Given a distinguisher and a list of parts, evaluate the distinguisher on each part.
     Parts should be a list of dataframes.
@@ -152,58 +161,47 @@ def evaluate(distinguisher, parts, prefix, length_of_df, subsample):
     total_len = 0
     for i, part in enumerate(parts):
         log.info(f"Processing part {i+1}/{len(parts)}")
-        part_len = distinguish_attacks(distinguisher, part, length_of_df, prefix, subsample)
+        part_len, pairs = distinguish_attacks(distinguisher, part, prefix, subsample)
         total_len += part_len
-        log.info(f"Distinguishes per experiment: {part_len/60:.2f}\n")
+        log.info(f"Distinguishes per experiment: {part_len/pairs/2:.2f}\n")
     log.info(f"Total length: {total_len}")
 
 def main():
-    # Directory containing attack traces
-    attack_trace_dir = "attack/traces/"
-    
     oracle = "InternLMOracle"
-    length_of_df = 30
 
     # Select watermark types and mutators to evaluate
-    watermark_types = [
-        "SIR",
-        "KGW",
-        "Adaptive",
-        "GPT4o_unwatermarked"
-    ]
-    mutators = [
-        "EntropyWordMutator",
-        "WordMutator",
-        "SpanMutator",
-        "SentenceMutator",
-        "DocumentMutator",
-        "Document1StepMutator",
-        "Document2StepMutator",
-    ]
+    experiments = {
+        "GPT4o_unwatermarked": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
+        "Adaptive": ["EntropyWordMutator", "Document2StepMutator"],
+        "KGW": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
+        "SIR": ['DocumentMutator'],
+    }
 
     # Construct parts
     parts = []
-    for watermark_type in watermark_types:
-        for mutator in mutators:
+    for watermark_type in experiments:
+        for mutator in experiments[watermark_type]:
+            attack_trace_dir = "./attack/traces/"
             df = get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator)
             if len(df) == 0:
-                log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator} in ./attack/traces, trying in ./attack/traces/annotated.")
-                attack_trace_dir = "./attack/traces/annotated"
+                attack_trace_dir = "./attack/traces/annotated/"
                 df = get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator)
                 if len(df) == 0:
                     log.warning(f"No attack traces found for {oracle}, {watermark_type}, {mutator}. Skipping.")
-                continue
+                    continue
             log.info(f"Loaded {len(df)} attack traces for {oracle}, {watermark_type}, {mutator} from {attack_trace_dir}")
-            split_df = split_to_parts(df, length_of_df)
+            split_df = split_to_parts(df)
+            if len(split_df) < 3:
+                log.warning(f"Expected 3 parts for {oracle}, {watermark_type}, {mutator}, got {len(split_df)}: {','.join([x['prompt_type'].unique()[0] for x in split_df])}")
             parts.extend(split_df)
     log.info(f"Total parts: {len(parts)}")
 
     # Evaluate distinguishers
-    evaluate(None, parts, "dryrun", length_of_df, 4)
+    evaluate(None, parts, "dryrun", 4)
 
     llm, distinguisher_persona = get_model("llama3.1-70B")
     for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
-        evaluate(sd, parts, "llama3.1-70B-full", length_of_df, 4)
+        evaluate(sd, parts, "llama3.1-70B-full", 4)
 
 if __name__ == "__main__":
 
