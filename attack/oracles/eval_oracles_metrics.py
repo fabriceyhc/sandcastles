@@ -120,7 +120,8 @@ file_paths = [
     './attack/oracles/results/IMP_oracle_eval_v3.csv',
     './attack/oracles/results/IMP_oracle_eval_DiffOracle-IMP-sft.csv',
     './attack/oracles/results/IMP_oracle_eval_sfts.csv',
-    './attack/oracles/results/IMP_oracle_eval_new_rewardbench.csv'
+    './attack/oracles/results/IMP_oracle_eval_new_rewardbench.csv',
+    './attack/oracles/results/oracle_eval_prometheus.csv'
 ]
 
 # Example usage with different penalty weights for each class
@@ -132,4 +133,4 @@ penalty_weights = {
 
 results = analyze_response_quality(file_paths, penalty_weights=penalty_weights)
 print(results)
-results.to_csv('./attack/oracles/results/IMP_oracle_eval_all_metrics.csv', index=False)
+results.to_csv('./attack/oracles/results/IMP_oracle_eval_all_metrics_v2.csv', index=False)
