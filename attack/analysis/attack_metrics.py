@@ -99,20 +99,23 @@ if __name__ == "__main__":
     "WordMutator",
     "EntropyWordMutator",
 ]
-    watermarks = ["Adaptive", "KGW"]
+    watermarks = ["Adaptive", "KGW", "SIR"]
 
     cutoffs = {
         "Adaptive" : [50, 60, 70, 80, 90, 100],
-        "KGW" :  [0, 0.5, 1, 2, 3, 6]
+        "KGW" :  [0, 0.5, 1, 2, 3, 6],
+        "SIR" : [0, 0.1, 0.2, 0.3, 0.5, 1]
+
     }
     labels = ["Average Time to Success", "Average Attack Success", "Average Steps to Success", "Average score change"]
     titles = ["Time to Success", "Attack Success Rate", "Steps to Sucess", "Score change"]
   
 
-    mutator_markers = ["s", "D", "X", "o", "^", "p"]
+    mutator_markers = ["s", "D", "X", "o", "^", "p", ".", "<", ">"]
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
         fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle(f"{watermarker}")
         # plt.subplots_adjust(left=.1, bottom=None, right=None, top=None, wspace=.3, hspace=None)
         axsl = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
         for idm, mutator in enumerate(mutators):
