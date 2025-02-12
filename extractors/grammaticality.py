@@ -14,16 +14,22 @@ class GrammarMetric:
         """
         self.language_tool = language_tool_python.LanguageTool('en-US')
 
-    def find_grammar_issues(self, text, early=False):
-        if early:
-            text = ' '.join(text.split()[:50])
-        return self.language_tool.check(text)
+    def find_grammar_issues(self, text, early=False): 
+        try:
+            if early:
+                text = ' '.join(text.split()[:50])
+            return self.language_tool.check(text)
+        except:
+            return
     
 
     def evaluate(self, texts, return_mean=True):
-        scores = [len(self.find_grammar_issues(t)) for t in texts]
-        scores = np.array(scores)
-        return scores.mean() if return_mean else scores
+        try:
+            scores = [len(self.find_grammar_issues(t)) for t in texts]
+            scores = np.array(scores)
+            return scores.mean() if return_mean else scores
+        except:
+            return
 
     def evaluate_dataframe(self, df, text_column, new_column, early=False):
         """

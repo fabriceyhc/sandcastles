@@ -7,6 +7,7 @@ import traceback
 import torch
 import nltk
 from nltk.tokenize import word_tokenize
+from extractors.diversity import UniqueBigramsDiversity
 
 # Ensure you have the necessary NLTK resources
 nltk.download('punkt')
@@ -32,6 +33,10 @@ def evaluate_column(df, column):
         elif column == "word_count":
             print(f"Calculating word_count...")
             df["word_count"] = df["text"].dropna().apply(lambda text: len(word_tokenize(text)))
+        elif column == "unique_bigrams":
+            print(f"Calculating UniqueBigramsDiversity...")
+            metric = UniqueBigramsDiversity()
+            df = metric.evaluate_dataframe(df, "text", "unique_bigrams")
         else:
             print("WRONG COLUMN!")
         
@@ -42,9 +47,9 @@ def evaluate_column(df, column):
         print(f"Error in {column}: {str(e)}\n{traceback.format_exc()}")
     return df
 
-REQUIRED_COLUMNS = ["perplexity", "grammar_errors", "internlm_quality", "word_count"] 
+REQUIRED_COLUMNS = ["perplexity", "grammar_errors", "internlm_quality", "word_count", "unique_bigrams"] 
 
-watermarks = ["unwatermarked"]
+watermarks = ["Adaptive", "SIR", "KGW", "unwatermarked", "GPT4o_unwatermarked"]
 
 for watermark in watermarks:
 

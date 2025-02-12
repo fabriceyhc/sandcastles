@@ -1,10 +1,10 @@
 
-from textdiversity import (
-    TokenSemantics, DocumentSemantics, AMR, # semantics
-    DependencyParse, ConstituencyParse,     # syntactical
-    PartOfSpeechSequence,                   # morphological
-    Rhythmic                                # phonological
-)
+# from textdiversity import (
+#     TokenSemantics, DocumentSemantics, AMR, # semantics
+#     DependencyParse, ConstituencyParse,     # syntactical
+#     PartOfSpeechSequence,                   # morphological
+#     Rhythmic                                # phonological
+# )
 from lexical_diversity import lex_div as ld
 from nltk import ngrams
 from nltk.tokenize import word_tokenize
@@ -26,6 +26,24 @@ class BaseDiversityMetric:
         after_div = self.evaluate(after_df)
         div = np.nan_to_num(after_div / before_div)
         return div
+
+    def evaluate_dataframe(self, df, text_column, new_column):
+        """
+        Scores the dataframe by calculating unique bigrams per row.
+        
+        :param df: The input DataFrame.
+        :param text_column: The name of the column containing the text.
+        :param new_column: The name of the new column to store the unique bigram counts.
+        :return: The DataFrame with the new column added.
+        """
+        def count_unique_bigrams(text):
+            tokens = word_tokenize(text)
+            bigrams = list(ngrams(tokens, 2))
+            return len(set(bigrams))
+        
+        # Apply the function to each row in the DataFrame
+        df[new_column] = df[text_column].apply(count_unique_bigrams)
+        return df
 
 
 class DocumentSemanticDiversity(BaseDiversityMetric):
