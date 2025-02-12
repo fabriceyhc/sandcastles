@@ -4,27 +4,30 @@ import re
 import uuid
 import ast
 
-def process_dataframe(df):
+def process_dataframe(df, threshold):
     
     results = []
     
     for group_id, group in df.groupby("group_id"):
 
         first_row = group.loc[group["step_num"] == 0].head(1)
-        final_row = group.loc[group["quality_preserved"] == True & group["watermark_score"].notna()].tail(1)
+        final_row = group.loc[(group["quality_preserved"] == True) & (group["watermark_score"].notna())].tail(1)
         
         if first_row.empty:
-            print(f"first_row: {first_row}")
-            print(f"final_row: {final_row}")
-            print(f"group: {group[['group_id', 'step_num', 'quality_preserved', 'watermark_score']]}")
-            raise "Missing row!"
+            print(f"[MAIN] Missing step_num == 0 for group_id={group_id}")
+            continue
 
         if final_row.empty:
             print(f"[MAIN] No successful mutations found for group_id={group_id}")
             continue
         
+        final_row_instance = final_row.iloc[0]
+        if final_row_instance['watermark_score'] > threshold:
+            print(f"[MAIN] Skipping group {group_id} with watermark_score {final_row_instance['watermark_score']} > threshold {threshold}")
+            continue
+        
         first_row = first_row.iloc[0]
-        final_row = final_row.iloc[0]
+        final_row = final_row_instance
         
         # Extract required values
         prompt = first_row["prompt"]
@@ -53,12 +56,8 @@ def process_dataframe(df):
             "attacked_InternLMOracle_score": attacked_score
         })
     
-    # Convert results to DataFrame and return
     return pd.DataFrame(results)
 
-# ---------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------
 def main():
 
     from attack.utils import load_all_csvs
@@ -69,12 +68,22 @@ def main():
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
-    # watermarks.reverse()
-    # mutators.reverse()
+    unwatermarked_mean_std = {
+        "Adaptive": (49.42577, 3.365801),
+        "KGW": (-0.82778, 1.047094772),
+        "SIR": (0.077541, 0.068233825),
+    }
 
     dfs = []
 
     for watermark in watermarks:
+
+        if watermark not in unwatermarked_mean_std:
+            print(f"[MAIN] Skipping {watermark} - no threshold data available.")
+            continue
+
+        score_mean, score_std = unwatermarked_mean_std[watermark]
+        threshold = score_mean + 2 * score_std
 
         for mutator in mutators:
 
@@ -84,9 +93,13 @@ def main():
                 print(f"[MAIN] No traces found for {watermark} + {mutator}")
                 continue
 
+            # Apply Adaptive watermark score filtering
+            if watermark == "Adaptive":
+                trace_df = trace_df[~trace_df['watermark_score'].between(-0.0001, 0.0001)]
+
             print(f"[MAIN] Processing traces for {watermark} + {mutator}")
 
-            first_vs_final_df = process_dataframe(trace_df)
+            first_vs_final_df = process_dataframe(trace_df, threshold)
             first_vs_final_df["watermark"] = [watermark] * len(first_vs_final_df)
             first_vs_final_df["mutator"] = [mutator] * len(first_vs_final_df)
             
@@ -95,17 +108,12 @@ def main():
     final_df = pd.concat(dfs, axis=0)
     final_df = final_df.dropna(subset=["initial_InternLMOracle_score", "attacked_InternLMOracle_score"])
 
-    print(final_df)
-
     final_df.to_csv(f"./data/final_review/full_dataset_len={len(final_df)}.csv", index=False)
 
-    # SUBSAMPLE
-
-    N = 10  # Maximum number of rows per group
+    # Subsample
+    N = 20
     final_df_subsampled = final_df.groupby(['watermark', 'mutator'], group_keys=False).apply(lambda x: x.sample(min(len(x), N)))
-    print(final_df_subsampled)
-
-    final_df_subsampled.to_csv(f"./data/final_review/subssampled_dataset_len={len(final_df_subsampled)}.csv", index=False)
+    final_df_subsampled.to_csv(f"./data/final_review/subsampled_dataset_len={len(final_df_subsampled)}.csv", index=False)
 
 
 if __name__ == "__main__":
