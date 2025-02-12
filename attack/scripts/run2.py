@@ -79,7 +79,8 @@ def main(cfg):
 
             if "Document2" in m_str:
                 # allowed_indices = [4, 6, 8, 10, 12, 21, 23, 28, 34, 48, 61, 83]
-                allowed_indices = [8, 48, 61, 83]
+                # allowed_indices = [8, 48, 61, 83]
+                allowed_indices = [8]
                 data = data.loc[data.index.isin(allowed_indices)].reset_index(drop=True)
 
             cfg.attack.log_csv_path = f"./attack/traces/{o_str}_{d}_{m_str}_n-steps={cfg.attack.max_steps}_attack_results.csv"
