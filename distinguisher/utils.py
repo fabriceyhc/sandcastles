@@ -126,8 +126,8 @@ def separate_attacks(df):
     
     return attacks
 
-def get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator):
-    df = load_all_csvs(attack_trace_dir, watermark_type, mutator)
+def get_attack_traces(attack_trace_dir, oracle, watermark_type, mutator, ignore_long=True):
+    df = load_all_csvs(attack_trace_dir, watermark_type, mutator, ignore_long=ignore_long)
     attacks = separate_attacks(df)
     all_attacks = []
     for i, attack in enumerate(attacks):
