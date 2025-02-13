@@ -35,6 +35,9 @@ def process_dataframe(df, threshold):
         attacked_text = final_row["mutated_text"]
         mutation_num = final_row["mutation_num"]
         final_steps = final_row["step_num"]
+
+        if mutation_num == 0:
+            continue
         
         # Extract scores safely
         initial_quality_analysis = ast.literal_eval(first_row["quality_analysis"])
