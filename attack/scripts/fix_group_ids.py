@@ -3,6 +3,7 @@ import glob
 import pandas as pd
 
 def assign_unique_group_ids(df):
+    df['step_num'] = pd.to_numeric(df['step_num'], errors='coerce')
     df['new_group'] = (df['step_num'] == -1).astype(int)
     df['group_id'] = df['new_group'].cumsum()
     df = df.drop(columns=['new_group'])
@@ -67,22 +68,22 @@ if __name__ == "__main__":
     # python -m attack.scripts.fix_group_ids
 
     oracles = [
-        "DiffOracle",
+        # "DiffOracle",
         "InternLMOracle"
     ]
 
     watermark_types = [
-        # "Adaptive",
+        "Adaptive",
         # "KGW",
-        "SIR",
+        # "SIR",
         # "GPT4o_unwatermarked",
     ]
 
     mutators = [
-        # "DocumentMutator",
+        "DocumentMutator",
         # "Document1StepMutator",
         # "Document2StepMutator",
-        "SentenceMutator",
+        # "SentenceMutator",
         # "SpanMutator",
         # "WordMutator",
         # "EntropyWordMutator",
@@ -96,5 +97,5 @@ if __name__ == "__main__":
 
                 print(f"[MAIN] Processing {watermark_type} + {mutator}")
 
-                # process_partitions("./attack/traces", watermark_type, mutator, oracle)
-                process_partitions("./attack/traces/annotated", watermark_type, mutator, oracle)
+                process_partitions("./attack/traces", watermark_type, mutator, oracle)
+                # process_partitions("./attack/traces/annotated", watermark_type, mutator, oracle)
