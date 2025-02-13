@@ -200,7 +200,7 @@ def main():
 
     llm, distinguisher_persona = get_model("llama3.1-70B")
     for sd in [SimpleDistinguisher(llm, distinguisher_persona)]:
-        evaluate(sd, parts, "llama3.1-70B-full", 4)
+        evaluate(sd, parts, "llama3.1-70B-long", 4)
 
 if __name__ == "__main__":
 
