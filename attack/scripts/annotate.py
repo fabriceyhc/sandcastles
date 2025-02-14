@@ -64,7 +64,7 @@ def assign_unique_group_ids(df):
         df['new_group'] = (df['step_num'] == -1).astype(int)
     else:
         # If no row with -1 found, use step_num == 0
-        print("THIS TRACE IS MISSING STEP_NUM==-1!!!!!!!! WHO DID THIS!!!!!!")
+        print("THIS TRACE IS MISSING STEP_NUM==-1!!!!!!!!!!!!!!!!!!!!!!!!!")
         df['new_group'] = (df['step_num'] == 0).astype(int)
         
     df['group_id'] = df['new_group'].cumsum()

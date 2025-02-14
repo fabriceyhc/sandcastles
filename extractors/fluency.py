@@ -231,6 +231,26 @@ class FluencyMetric:
         scores = np.array(results)
         return scores.mean() if return_mean else scores
 
+    def evaluate_single_text(self, text):
+        """
+        Compute the perplexity for a single text. Returns np.nan if text is not valid.
+        """
+        if text is None or not isinstance(text, str) or len(text.strip()) == 0:
+            return np.nan
+
+        try:
+            results = self.metric._compute(
+                predictions=[text],
+                model_id=self.model_id,
+                max_length=1024,
+                device=self.device,
+                batch_size=1  # Single text
+            )
+            # 'perplexities' is a list, so return the first (only) item
+            return results['perplexities'][0]
+        except Exception:
+            return np.nan
+
     def evaluate_dataframe(self, df, text_column, new_column, N=1):
         """
         Evaluate a pandas DataFrame row-by-row, adding a new column with perplexity scores.
