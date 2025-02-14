@@ -28,4 +28,4 @@ if __name__ == "__main__":
                 if len(group[group['quality_preserved'].astype(bool) == True]) == 0:
                     total += 1
                 groups += 1
-        print(f"{mutator} had {total}/{groups} groups never have a successful mutation")
+        print(f"{mutator} had {total/groups}/ groups never have a successful mutation")
