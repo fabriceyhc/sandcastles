@@ -14,44 +14,87 @@ class GrammarMetric:
         """
         self.language_tool = language_tool_python.LanguageTool('en-US')
 
-    def find_grammar_issues(self, text, early=False): 
+    def find_grammar_issues(self, text, early=False):
+        # Check for null/NaN or non-string values
+        if text is None or not isinstance(text, str):
+            return []
+        
+        # Optionally limit to 50 words if early==True
+        if early:
+            text = ' '.join(text.split()[:50])
+        
         try:
-            if early:
-                text = ' '.join(text.split()[:50])
             return self.language_tool.check(text)
         except:
-            return
-    
+            # Return an empty list if checking fails
+            return []
 
-    def evaluate(self, texts, return_mean=True):
-        try:
-            scores = [len(self.find_grammar_issues(t)) for t in texts]
-            scores = np.array(scores)
-            return scores.mean() if return_mean else scores
-        except:
-            return
-
-    def evaluate_dataframe(self, df, text_column, new_column, early=False):
+    def evaluate(self, texts, return_mean=True, N=1):
         """
-        Evaluate a pandas DataFrame, adding a new column with grammar issue counts.
+        Evaluate a list of texts and return either the average grammar issues
+        or a list of grammar issue counts. Only evaluates every Nth text.
+
+        :param texts: A list of texts to evaluate
+        :param return_mean: If True, returns the mean of the issues; 
+                            otherwise returns a numpy array of issue counts.
+        :param N: Only evaluate grammar issues on every Nth text 
+                  (e.g., if N=2, evaluate indices 0, 2, 4, ...).
+        """
+        # If texts is None or empty, return 0 or empty array
+        if not texts:
+            return 0 if return_mean else np.array([])
         
+        try:
+            scores = []
+            for i, t in enumerate(texts):
+                if i % N == 0:  # only evaluate every Nth index
+                    issues = self.find_grammar_issues(t)
+                    scores.append(len(issues))
+            
+            scores = np.array(scores)
+            if scores.size == 0:
+                # Edge case: if N > len(texts), no scores are collected
+                return 0
+
+            return scores.mean() if return_mean else scores
+        
+        except:
+            return 0
+
+    def evaluate_dataframe(self, df, text_column, new_column, early=False, N=1):
+        """
+        Evaluate a pandas DataFrame, adding a new column with grammar issue counts
+        only on every Nth row. Non-Nth rows get NaN.
+
         :param df: pandas DataFrame containing the text data.
         :param text_column: the name of the column containing the text to evaluate.
         :param new_column: the name of the new column to store the results.
         :param early: if True, only evaluate the first 50 words of each text.
-        :return: DataFrame with new column containing grammar issue counts.
+        :param N: Only evaluate rows where row index % N == 0. 
+        :return: DataFrame with new column containing grammar issue counts 
+                 on every Nth row (others set to NaN).
         """
-        df[new_column] = df[text_column].progress_apply(lambda text: len(self.find_grammar_issues(text, early=early)))
+        # We use df.apply across axis=1 so that we can check the row index
+        df[new_column] = df.progress_apply(
+            lambda row: len(self.find_grammar_issues(row[text_column], early=early))
+            if row["step_num"] % N == 0 or row["step_num"] == -1
+            else np.nan,
+            axis=1
+        )
+        
         return df
-    
+
 
 if __name__ == '__main__':
+
+    # python -m extractors.grammaticality
     
     texts_0 = [
         "I love you",
         "I hate she door not me.",
         "The boy laughed",
         "The boy cried",
+        None
     ]
 
     texts_a = [

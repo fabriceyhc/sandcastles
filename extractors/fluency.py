@@ -189,7 +189,7 @@ class FluencyMetric:
         is natural / human sounding, then perplexity is a measure of 
         model quality. However, when we trust that the language model is
         pretty good already and we aren't sure about the quality of the 
-        text, then we can use perplexity to measure text naturalness. 
+        text, we can use perplexity to measure text naturalness. 
         :Package Requirements:
             * pip install evaluate
         :Language: english
@@ -197,31 +197,60 @@ class FluencyMetric:
         self.model_id = model_id
         self.batch_size = batch_size
         self.device = device
-        self.metric = Perplexity()
-    
-    def evaluate(self, texts, return_mean=True):
-        scores = self.metric._compute(
-            predictions=texts, 
+        self.metric = Perplexity()  # Or load("perplexity") if using evaluate.load
+
+    def evaluate(self, texts, return_mean=True, N=1):
+        """
+        Evaluate perplexity on a list of texts. If N > 1, only evaluate
+        on texts whose index (0-based) is divisible by N.
+        
+        :param texts: list of text strings.
+        :param return_mean: if True, returns the mean perplexity; 
+                            otherwise returns the array of perplexities.
+        :param N: skip texts whose index is not divisible by N. Defaults to 1 (evaluate all).
+        :return: either the mean of perplexities or an array of perplexities (for the subset).
+        """
+        if not texts:
+            return 0 if return_mean else np.array([])
+
+        # Select only texts where i % N == 0
+        selected_texts = [txt for i, txt in enumerate(texts) if i % N == 0]
+        if len(selected_texts) == 0:
+            # Edge case: if N > len(texts), no texts are selected
+            return 0 if return_mean else np.array([])
+
+        # Compute perplexities on the selected subset
+        results = self.metric._compute(
+            predictions=selected_texts,
             model_id=self.model_id,
             max_length=1024,
             device=self.device,
-            batch_size=self.batch_size)['perplexities']
-        scores = np.array(scores)
+            batch_size=self.batch_size
+        )['perplexities']
+
+        scores = np.array(results)
         return scores.mean() if return_mean else scores
-    
-    def evaluate_dataframe(self, df, text_column, new_column):
+
+    def evaluate_dataframe(self, df, text_column, new_column, N=1):
         """
-        Evaluate a pandas DataFrame, adding a new column with perplexity scores.
-        
+        Evaluate a pandas DataFrame row-by-row, adding a new column with perplexity scores.
+        We only compute the perplexity for rows whose index is divisible by N; 
+        other rows get NaN.
+
         :param df: pandas DataFrame containing the text data.
-        :param text_column: the name of the column containing the text to evaluate.
-        :param new_column: the name of the new column to store the results.
-        :return: DataFrame with new column containing perplexity scores.
+        :param text_column: name of the column containing the text to evaluate.
+        :param new_column: name of the new column to store results.
+        :param N: only evaluate rows where row.index % N == 0.
+        :return: DataFrame with new column containing perplexity scores 
+                 (NaN for rows that are not multiples of N).
         """
-        perplexities = self.evaluate(df[text_column].tolist(), return_mean=False)
-        df[new_column] = perplexities
+        df[new_column] = df.progress_apply(
+            lambda row: self.evaluate_single_text(row[text_column])
+            if row["step_num"] % N == 0 or row["step_num"] == -1
+            else np.nan, 
+            axis=1
+        )
         return df
-    
 
 if __name__ == '__main__':
     

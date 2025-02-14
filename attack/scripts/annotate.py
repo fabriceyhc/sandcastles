@@ -123,6 +123,7 @@ def load_partitioned_data(watermark, mutator):
         return None, []
     
     combined_df = pd.concat(dfs, ignore_index=True)
+
     # IMPORTANT: Assign cross-file group IDs here (without re-sorting)
     if "group_id" not in combined_df.columns:
         combined_df = assign_crossfile_group_ids(combined_df)
@@ -135,8 +136,7 @@ def load_partitioned_data(watermark, mutator):
 def is_fully_annotated(df):
     """Check if all required columns exist and have no null values."""
     for col in REQUIRED_COLUMNS:
-        # Check if the column exists and contains no null values
-        if col not in df.columns or df[col].isnull().any():
+        if col not in df.columns:
             return False
     return True
 
@@ -159,11 +159,11 @@ def evaluate_column(df, column, mutator):
         elif column == "perplexity":
             print(f"Loading FluencyMetric()")
             metric = FluencyMetric()
-            df = metric.evaluate_dataframe(df, "mutated_text", "perplexity")
+            df = metric.evaluate_dataframe(df, "mutated_text", "perplexity", N)
         elif column == "grammar_errors":
             print(f"Loading GrammarMetric()")
             metric = GrammarMetric()
-            df = metric.evaluate_dataframe(df, "mutated_text", "grammar_errors")
+            df = metric.evaluate_dataframe(df, "mutated_text", "grammar_errors", N)
         elif column == "unique_bigrams":
             print(f"Calculating UniqueBigramsDiversity...")
             metric = UniqueBigramsDiversity()
@@ -269,6 +269,7 @@ def main():
         for mutator in mutators:
             # Skip over incomplete traces
             if ((watermark == "GPT4o_unwatermarked" and mutator == "DocumentMutator") or
+                # (watermark == "KGW" and mutator == "EntropyWordMutator") or
                 (watermark == "Adaptive" and mutator == "DocumentMutator")
                 ):
                 print(f"Skipping {watermark} + {mutator}")
@@ -282,6 +283,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=3 python -m attack.scripts.annotate
+    # CUDA_VISIBLE_DEVICES=0 python -m attack.scripts.annotate
 
     main()
