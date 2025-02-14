@@ -335,7 +335,11 @@ def load_all_csvs(base_dir, watermark_str, mutator_str, oracle_str="InternLMOrac
     # Read each CSV into a list of DataFrames
     dataframes = []
     for csv_path in csv_files:
-        df = pd.read_csv(csv_path)
+        try:
+            df = pd.read_csv(csv_path)
+        except:
+            df = pd.read_csv(csv_path, encoding="cp1252") # Adaptive DocumentMutator has an encoding issue because of being in MS Excel :(
+
         dataframes.append(df)
 
     # Concatenate into one DataFrame
