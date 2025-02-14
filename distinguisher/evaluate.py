@@ -176,9 +176,12 @@ def main():
     #     "KGW": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
     #     "SIR": ['DocumentMutator'],
     # }
+    # experiments = {
+    #     "Adaptive": [ "Document1StepMutator"],
+    #     "SIR": ['Document1StepMutator', 'Document2StepMutator'],
+    # }
     experiments = {
-        "Adaptive": [ "Document1StepMutator"],
-        "SIR": ['Document1StepMutator', 'Document2StepMutator'],
+        "KGW": ["DocumentMutator"],
     }
 
     # Construct parts
@@ -209,6 +212,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=4,7 python -m distinguisher.evaluate
+    # CUDA_VISIBLE_DEVICES=0,1 python -m distinguisher.evaluate
 
     main()
