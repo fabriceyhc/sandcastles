@@ -20,7 +20,7 @@ def get_max_step_count(df):
 
 def get_successully_attacked_rows(df, watermark_threshold=0.0):
     successful_df = df[(df['quality_preserved'] == True) & 
-                       (df['watermark_score'] < watermark_threshold) & (df['watermark_score'] != 0)]
+                       (df['watermark_score'] < watermark_threshold)]
     successful_df = successful_df.sort_values(by='step_num').groupby('group_id').first().reset_index()
     return successful_df
 
@@ -49,7 +49,7 @@ def get_mean_change_in_z_scores(df, watermark_threshold=0.0):
     quality_preserved_df = quality_preserved_df.sort_values(by='step_num')
     z_score_changes = []
     for group_id, group_df in quality_preserved_df.groupby('group_id'):
-        first_success_idx = group_df[(group_df['watermark_score'] < watermark_threshold) & (df['watermark_score'] != 0)].index.min()
+        first_success_idx = group_df[(group_df['watermark_score'] < watermark_threshold)].index.min()
         if pd.notna(first_success_idx):
             group_df = group_df.loc[:first_success_idx]  # Consider only steps before the threshold
         else:
@@ -128,6 +128,8 @@ if __name__ == "__main__":
             df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if df.empty:
                 continue
+            if "Adaptive" in watermarker:
+                df = df[df['watermark_score'] != 0]
             for cutoff in cutoffs[watermarker]:
                     try:
                         mean_time = get_mean_total_time_for_successful_attacks(df, cutoff)
@@ -148,6 +150,7 @@ if __name__ == "__main__":
                 axsl[i].set_ylabel(labels[i])
                 axsl[i].set_title(titles[i])
                 # Move legend outside the plot
+                axsl[i].set_yscale("symlog")
                 axsl[i].legend(loc="upper left", bbox_to_anchor=(1.05, 1))
         fig.subplots_adjust(right=0.8, wspace=0.8, hspace=0.3)
         fig.savefig(f"./attack/analysis/figs/{watermarker}.png")
