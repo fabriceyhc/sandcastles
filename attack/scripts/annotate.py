@@ -56,19 +56,20 @@ def parse_filename(path):
 # ---------------------------------------------------------------------
 # Helper: assign a cross-file group_id
 # ---------------------------------------------------------------------
-def assign_crossfile_group_ids(combined_df):
-    """
-    Compute a group ID for rows across files.
-    We assume that step_num == -1 indicates the start of a new group.
+def assign_unique_group_ids(df):
+    df['step_num'] = pd.to_numeric(df['step_num'], errors='coerce')
     
-    NOTE: The original code re-sorted the dataframe after computing group_id,
-    which inadvertently reorders rows from their original (file) order.
-    Removing that sort preserves the correct group order.
-    """
-    combined_df['new_group'] = (combined_df['step_num'] == -1).astype(int)
-    combined_df['group_id'] = combined_df['new_group'].cumsum()
-    combined_df.drop(columns=['new_group'], inplace=True)
-    return combined_df
+    # Check if there is any row with step_num == -1
+    if (df['step_num'] == -1).any():
+        df['new_group'] = (df['step_num'] == -1).astype(int)
+    else:
+        # If no row with -1 found, use step_num == 0
+        print("THIS TRACE IS MISSING STEP_NUM==-1!!!!!!!! WHO DID THIS!!!!!!")
+        df['new_group'] = (df['step_num'] == 0).astype(int)
+        
+    df['group_id'] = df['new_group'].cumsum()
+    df.drop(columns=['new_group'], inplace=True)
+    return df
 
 # ---------------------------------------------------------------------
 # Helper: load partitioned data
@@ -262,8 +263,8 @@ def main():
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
-    watermark_types.reverse()
-    mutators.reverse()
+    # watermark_types.reverse()
+    # mutators.reverse()
 
     for watermark in watermark_types:
         for mutator in mutators:

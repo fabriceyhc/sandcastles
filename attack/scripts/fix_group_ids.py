@@ -4,16 +4,29 @@ import pandas as pd
 
 def assign_unique_group_ids(df):
     df['step_num'] = pd.to_numeric(df['step_num'], errors='coerce')
-    df['new_group'] = (df['step_num'] == -1).astype(int)
+    
+    # Check if there is any row with step_num == -1
+    if (df['step_num'] == -1).any():
+        df['new_group'] = (df['step_num'] == -1).astype(int)
+    else:
+        # If no row with -1 found, use step_num == 0
+        df['new_group'] = (df['step_num'] == 0).astype(int)
+        
     df['group_id'] = df['new_group'].cumsum()
-    df = df.drop(columns=['new_group'])
+    df.drop(columns=['new_group'], inplace=True)
     return df
 
 def load_partitioned_data(base_dir, watermark_str, mutator_str, oracle_str):
     """Load all CSV parts with tracking of original file paths"""
     pattern = os.path.join(base_dir, f"{oracle_str}_{watermark_str}_{mutator_str}*")
     csv_files = glob.glob(pattern)
-    csv_files.sort()
+
+    # Sort them so part1 < part2 < part3, etc. (if you have chunked files)
+    # extract the part number
+    part = lambda filename: int(filename.split("_part")[-1].split(".")[0]) if "_part" in filename else 0
+    # sort by the base name and then by the part number by converting the filename to a tuple
+    cmp = lambda filename: (filename.split("_part")[0], part(filename))
+    csv_files.sort(key=cmp)
 
     dfs = []
     for path in csv_files:
@@ -74,19 +87,19 @@ if __name__ == "__main__":
 
     watermark_types = [
         "Adaptive",
-        # "KGW",
-        # "SIR",
-        # "GPT4o_unwatermarked",
+        "KGW",
+        "SIR",
+        "GPT4o_unwatermarked",
     ]
 
     mutators = [
-        "DocumentMutator",
+        # "DocumentMutator",
         # "Document1StepMutator",
         # "Document2StepMutator",
         # "SentenceMutator",
         # "SpanMutator",
-        # "WordMutator",
-        # "EntropyWordMutator",
+        "WordMutator",
+        "EntropyWordMutator",
     ]
 
     for oracle in oracles:
@@ -97,5 +110,5 @@ if __name__ == "__main__":
 
                 print(f"[MAIN] Processing {watermark_type} + {mutator}")
 
-                process_partitions("./attack/traces", watermark_type, mutator, oracle)
-                # process_partitions("./attack/traces/annotated", watermark_type, mutator, oracle)
+                # process_partitions("./attack/traces", watermark_type, mutator, oracle)
+                process_partitions("./attack/traces/annotated", watermark_type, mutator, oracle)
