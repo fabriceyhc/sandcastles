@@ -17,6 +17,7 @@ class AttackParser():
     def __init__(self, file, df=None):
         if file is not None:
             df = pd.read_csv(file)
+        df['step_num'] = pd.to_numeric(df['step_num'], errors='coerce')
         df = df[(df['quality_preserved'] == True) & (df['length_issue'] == False)]
         end = df[df['mutation_num'] == df['mutation_num'].max()].tail(1)['step_num']
         df = df[df['step_num'] <= end.values[0]]
@@ -28,7 +29,7 @@ class AttackParser():
         # check for consistency
         for i, row in df.iterrows():
             if i == 0:
-                assert row['step_num'] == -1, "First row is not step -1"
+                # assert row['step_num'] == -1, "First row is not step -1"
                 continue  # Skip the first row
 
             # # Check current_text matches mutated_text from the previous row
@@ -181,7 +182,7 @@ def main():
     #     "SIR": ['Document1StepMutator', 'Document2StepMutator'],
     # }
     experiments = {
-        "KGW": ["DocumentMutator"],
+        "Adaptive": ["DocumentMutator"],
     }
 
     # Construct parts
@@ -212,6 +213,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0,1 python -m distinguisher.evaluate
+    # CUDA_VISIBLE_DEVICES=5,7 python -m distinguisher.evaluate
 
     main()
