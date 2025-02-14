@@ -133,7 +133,8 @@ def load_partitioned_data(watermark, mutator):
 def is_fully_annotated(df):
     """Check if all required columns exist and have no null values."""
     for col in REQUIRED_COLUMNS:
-        if col not in df.columns:
+        # Check if the column exists and contains no null values
+        if col not in df.columns or df[col].isnull().any():
             return False
     return True
 
