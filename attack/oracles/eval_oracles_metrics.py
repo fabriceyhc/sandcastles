@@ -1,4 +1,4 @@
-# RUN: python -m oracles.eval_oracles_metrics
+# RUN: python -attack.oracles.eval_oracles_metrics
 
 import pandas as pd
 from sklearn.metrics import confusion_matrix
