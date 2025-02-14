@@ -11,20 +11,21 @@ if __name__ == "__main__":
         "WordMutator",
         "EntropyWordMutator",
     ]
-    for idx, watermarker in enumerate(watermarks):
-        print(f"Analyzing {watermarker}")
+    for idm, mutator in enumerate(mutators):
+        groups = 0
+        total = 0
+        # print(f"Analyzing {watermarker}")
         
-        for idm, mutator in enumerate(mutators):
-            print(f"Analyzing for {mutator}")
+        for idx, watermarker in enumerate(watermarks):
+            # print(f"Analyzing for {mutator}")
             df_total = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if df_total.empty:
                 continue
-            groups = 0
-            total = 0
+
             for id, group in df_total.groupby("group_id"):
                 assert len(group[group['quality_preserved'] == True]) + len(group[group['quality_preserved'] == False]) == len(group)
                 group = group[group['mutation_num'] >= 0]
                 if len(group[group['quality_preserved'].astype(bool) == True]) == 0:
                     total += 1
                 groups += 1
-            print(f"{watermarker} + {mutator} had {total}/{groups} groups never have a successful mutation")
+        print(f"{mutator} had {total}/{groups} groups never have a successful mutation")
