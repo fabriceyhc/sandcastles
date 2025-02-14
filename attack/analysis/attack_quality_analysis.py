@@ -64,9 +64,13 @@ def plot_sliding_window_success_rates():
             final_data = [pd.DataFrame(columns=["step_num", "quality_preserved"]) for e in range(1,11)]
             num_traces_per_entropy = [0] * 10
 
-
+            # bit silly 
+            csvs = [
+                load_all_csvs("./attack/traces", watermarker, mutator),
+                load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+            ]
             
-            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+            trace_df = pd.concat(csvs, ignore_index=True)
 
             if trace_df.empty:
                 print(f"\t\tEmpty dataframe! Skipping {watermarker}, {mutator}")
@@ -97,10 +101,12 @@ def plot_sliding_window_success_rates():
 
         fig.tight_layout(pad=3)
         plt.savefig(f"./attack/analysis/figs/rolling_success_{watermarker}.png")
-def plot_sliding_window_quality():
-    # dimensions to consider: watermark type, mutator, entropy level
 
-    for idx, watermarker in enumerate(watermarks):
+
+
+
+def plot_quality_degredation_vs_zscore():
+    for idx, watermarker in enumerate(annotated_watermarks):
         print(f"Plotting {watermarker}")
         # fig, axs = plt.subplots(3, 3, figsize=(20, 12))
         # axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[2,0], axs[2,1]]
@@ -116,118 +122,78 @@ def plot_sliding_window_quality():
             plt.subplot2grid((2,8), (1,4), colspan=2),           
             plt.subplot2grid((2,8), (1,6), colspan=2),
         ]
+
+
         plt.suptitle(watermarker)
 
         for idm, mutator in enumerate(mutators):
             print(f"\tPlotting for {mutator}")
+            traces = sorted(glob.glob(f"./attack/traces/?*{watermarker}_{mutator}?*annotated?*"))
             
-            window_size = num_steps(mutator)//10
+            # key is (prompt, trace_num) -> data
+            initial_data = {}
+            final_data = {}
 
-            axs[idm].set_xlabel("Step Number")
-            axs[idm].set_ylabel(f"Rolling Quality Score (window size = {window_size})")
-            axs[idm].set_ylim(.1, .21)
-            axs[idm].set_title(mutator)
+            trace_num_from_prompt = defaultdict(int)
 
-            # set legend for colors 
-            sm = plt.cm.ScalarMappable(cmap=cm.plasma, norm=plt.Normalize(vmin=1, vmax=10))
-            cbar = plt.colorbar(sm, ax=axs[idm], orientation='vertical')
-            cbar.set_label('Entropy Level')
-            
-            final_data = [pd.DataFrame(columns=["step_num", "armolm_quality"]) for e in range(1,11)]
-            num_traces_per_entropy = [0] * 10
+            for trace in traces:
+                trace_df = pd.read_csv(trace)
 
+                if "internlm_quality" not in trace_df.columns or "watermark_score" not in trace_df.columns:
+                    print(f"Skipping {trace}") 
+                    continue
+                
+                if "Adaptive" in trace:
+                    trace_df = trace_df[trace_df["watermark_score"] != 0]
 
-            
-            trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+                trace_df = trace_df[trace_df["quality_preserved"] == True]
+                trace_df = trace_df[["step_num", "watermark_score", "internlm_quality", "prompt"]]
 
-            if trace_df.empty:
-                print(f"\t\tEmpty dataframe! Skipping {watermarker}, {mutator}")
-                continue
+                # NOTE: This will contain trace data for multiple attack runs, and not necessarily from step 0/-1!!!!
+                for prompt, group in trace_df.groupby('prompt'):
+                    # Thank ChatGPT for this genius idea 
+                    group['trace_num'] = (group['step_num'] == -1).cumsum()
 
-
-            for run_num, attack in trace_df.groupby('group_id'):
-                attack["armolm_quality"] = attack["armolm_quality"].rolling(window=window_size, min_periods=1).mean()
-                entropy = prompt_to_entropy(attack["prompt"].iloc[0])
-                color = entropy_colors[entropy-1]
-
-                final_data[entropy-1] = pd.concat([final_data[entropy-1], attack[["step_num", "armolm_quality"]]]).groupby("step_num", as_index=False).sum()
-                num_traces_per_entropy[entropy-1] += 1
-
+                    for run_num, attack in group.groupby('trace_num'):
+                        trace_num_from_prompt[prompt] += 1
+                        trace_num = trace_num_from_prompt[prompt]
                         
-            for i, entropy_df in enumerate(final_data):
-                color = entropy_colors[i]
-                axs[idm].plot(entropy_df["step_num"], entropy_df["armolm_quality"]/num_traces_per_entropy[i], alpha=.8, color=color)
+                        # case 1: `attack` contains full attack trace 
+                        #   initial row is present
+                        #   min zscore row is present
+                        # case 2: `attack` contains beginning of trace
+                        #   initial row is present
+                        #   min zscore row may or may not be present
+                        # case 3: `attack` contains end of trace
+                        #   initial row is not present
+                        #   min zscore row may or may not be present
 
-        fig.tight_layout(pad=3)
-        plt.savefig(f"./attack/analysis/figs/rolling_quality_{watermarker}.png")
+                        initial_row = attack[attack["step_num"] == -1]
+                        min_zscore_row = attack[attack.watermark_score == attack.watermark_score.min()]
+                        key = (prompt, trace_num)
 
-
-
-
-# def plot_quality_degredation_vs_zscore():
-#     for idx, watermarker in enumerate(annotated_watermarks):
-#         print(f"Plotting {watermarker}")
-#         # fig, axs = plt.subplots(3, 3, figsize=(20, 12))
-#         # axs = [axs[0,0], axs[0,1], axs[0,2], axs[1,0], axs[1,1], axs[2,0], axs[2,1]]
-
-#         fig = plt.figure(figsize=(26, 12))
-#         axs = [
-#             plt.subplot2grid((2,8), (0,1), colspan=2),            
-#             plt.subplot2grid((2,8), (0,3), colspan=2),           
-#             plt.subplot2grid((2,8), (0,5), colspan=2),
-
-#             plt.subplot2grid((2,8), (1,0), colspan=2),           
-#             plt.subplot2grid((2,8), (1,2), colspan=2),
-#             plt.subplot2grid((2,8), (1,4), colspan=2),           
-#             plt.subplot2grid((2,8), (1,6), colspan=2),
-#         ]
-
-
-#         plt.suptitle(watermarker)
-
-#         for idm, mutator in enumerate(mutators):
-#             print(f"\tPlotting for {mutator}")
-#             trace_df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
+                        if len(initial_row) != 0:
+                            initial_data[key] = [initial_row["internlm_quality"].iloc[0], initial_row["watermark_score"].iloc[0]]
+                        if key not in final_data or final_data[key][1] > min_zscore_row["watermark_score"].iloc[0]:
+                            final_data[key] = [min_zscore_row["internlm_quality"].iloc[0], min_zscore_row["watermark_score"].iloc[0]]
             
-#             # key is (prompt, trace_num) -> data
-#             initial_data = {}
-#             final_data = {}
+            initial_data = pd.DataFrame.from_dict(initial_data, orient="index", columns=["quality", "zscores"])
+            final_data = pd.DataFrame.from_dict(final_data, orient="index", columns=["quality", "zscores"])
 
-#             trace_num_from_prompt = defaultdict(int)
+            axs[idm].scatter(final_data["zscores"], final_data["quality"], label="Minimum z-score")
+            axs[idm].scatter(initial_data["zscores"], initial_data["quality"], label="Initial")
 
-#             # for trace in traces:
-#             #     trace_df = pd.read_csv(trace)
-
-#             # if "internlm_quality" not in trace_df.columns or "watermark_score" not in trace_df.columns:
-#             #     print(f"Skipping {trace}") 
-#             #     continue
-            
-#             if "Adaptive" in watermarker:
-#                 trace_df = trace_df[trace_df["watermark_score"] != 0]
-
-#             trace_df = trace_df[trace_df["quality_preserved"] == True]
-#             trace_df = trace_df[["step_num", "watermark_score", "armolm_quality", "prompt"]]
-
-#             for id, group in trace_df.groupby("group_id"):
-
-            
-#             initial_data = pd.DataFrame.from_dict(initial_data, orient="index", columns=["quality", "zscores"])
-#             final_data = pd.DataFrame.from_dict(final_data, orient="index", columns=["quality", "zscores"])
-
-#             axs[idm].scatter(final_data["zscores"], final_data["quality"], label="Minimum z-score")
-#             axs[idm].scatter(initial_data["zscores"], initial_data["quality"], label="Initial")
-
-#             if "Adaptive" in watermarker:
-#                 axs[idm].set_xlabel("Adaptive Score")
-#             else:
-#                 axs[idm].set_xlabel("Z-score")
-#             axs[idm].set_ylabel(f"ArmoLM Quality")
-#             #axs[idm].set_ylim(-.05, 1.05)
-#             axs[idm].set_title(mutator)
-#             axs[idm].legend()
+            if "Adaptive" in trace:
+                axs[idm].set_xlabel("Adaptive Score")
+            else:
+                axs[idm].set_xlabel("Z-score")
+            axs[idm].set_ylabel(f"InternLM Quality")
+            #axs[idm].set_ylim(-.05, 1.05)
+            axs[idm].set_title(mutator)
+            axs[idm].legend()
         
-#         fig.tight_layout(pad=3)
-#         plt.savefig(f"./attack/analysis/figs/zscore_vs_quality_{watermarker}.png")
+        fig.tight_layout(pad=3)
+        plt.savefig(f"./attack/analysis/figs/zscore_vs_quality_{watermarker}.png")
 
 def plot_estimated_watermark_breaking():
     for watermarker in annotated_watermarks:
@@ -697,9 +663,9 @@ def exponential_offset(x, A, B, C):
 if __name__ ==  "__main__":
 
     # python -m attack.analysis.attack_efficiency_analysis
-    plot_sliding_window_quality()
-    # plot_sliding_window_success_rates()
-    # plot_quality_degredation_vs_zscore()
-    # plot_estimated_watermark_breaking()
+
+    plot_sliding_window_success_rates()
+    plot_quality_degredation_vs_zscore()
+    plot_estimated_watermark_breaking()
 
     # sanity_checks_rolling("quality_preserved", include_unannotated=True)
