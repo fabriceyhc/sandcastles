@@ -448,9 +448,9 @@ if __name__ == "__main__":
             "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"]
 
     unwatermarked_mean_std = {
-        "Adaptive": (49.425769812530945, 3.3846567364055837),
-        "KGW": (-0.8277770841872096, 1.0529608950427352),
-        "SIR": (0.0775412526135454, 0.06861609056292908),
+        "Adaptive": (49.42577, 3.365801),
+        "KGW": (-0.82778, 1.047094772),
+        "SIR": (0.077541, 0.068233825),
     }
 
     results = []

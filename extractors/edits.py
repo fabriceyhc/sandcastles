@@ -1,6 +1,12 @@
 from difflib import SequenceMatcher
 import re
 import numpy as np
+from tqdm import tqdm
+# from tqdm.auto import tqdm  # for notebooks
+
+# Create new `pandas` methods which use `tqdm` progress
+# (can use tqdm_gui, optional kwargs, etc.)
+tqdm.pandas()
 
 class EditsMetric:
     def __init__(self) -> None:
@@ -44,7 +50,7 @@ class EditsMetric:
         """
         
         # Apply the diff_analysis for each row in the DataFrame
-        df[new_column] = df.apply(lambda row: self.diff_analysis(row[current_text_column], row[mutated_text_column]), axis=1)
+        df[new_column] = df.progress_apply(lambda row: self.diff_analysis(row[current_text_column], row[mutated_text_column]), axis=1)
         return df
 
 

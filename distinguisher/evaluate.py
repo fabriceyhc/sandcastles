@@ -1,4 +1,4 @@
-# ./impossibility-watermark> CUDA_VISIBLE_DEVICES=7 python -m distinguisher.evaluate
+# ./impossibility-watermark> CUDA_VISIBLE_DEVICES=0,1,2 python -m distinguisher.evaluate
 
 from distinguisher.models import (SimpleDistinguisher, AggressiveSimple, SimpleGPT, SimplestGPT, LogicGPT, LogicSimple, LogicSimplest)
 from distinguisher.utils import get_attack_traces, extract_unique_column_value, get_id_tuples, get_model, prompt_to_entropy, prompt_to_type
@@ -170,11 +170,18 @@ def main():
     oracle = "InternLMOracle"
 
     # Select watermark types and mutators to evaluate
+    # experiments = {
+    #     "GPT4o_unwatermarked": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
+    #     "Adaptive": ["EntropyWordMutator", "Document2StepMutator"],
+    #     "KGW": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
+    #     "SIR": ['DocumentMutator'],
+    # }
+    # experiments = {
+    #     "Adaptive": [ "Document1StepMutator"],
+    #     "SIR": ['Document1StepMutator', 'Document2StepMutator'],
+    # }
     experiments = {
-        "GPT4o_unwatermarked": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
-        "Adaptive": ["EntropyWordMutator", "Document2StepMutator"],
-        "KGW": ["EntropyWordMutator", "Document1StepMutator", "Document2StepMutator"],
-        "SIR": ['DocumentMutator'],
+        "KGW": ["DocumentMutator"],
     }
 
     # Construct parts

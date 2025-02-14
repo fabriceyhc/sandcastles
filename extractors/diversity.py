@@ -9,6 +9,13 @@ from lexical_diversity import lex_div as ld
 from nltk import ngrams
 from nltk.tokenize import word_tokenize
 import numpy as np
+from tqdm import tqdm
+# from tqdm.auto import tqdm  # for notebooks
+
+# Create new `pandas` methods which use `tqdm` progress
+# (can use tqdm_gui, optional kwargs, etc.)
+tqdm.pandas()
+
 
 class BaseDiversityMetric:
     def __init__(self, metric):
@@ -37,12 +44,15 @@ class BaseDiversityMetric:
         :return: The DataFrame with the new column added.
         """
         def count_unique_bigrams(text):
-            tokens = word_tokenize(text)
-            bigrams = list(ngrams(tokens, 2))
-            return len(set(bigrams))
+            try:
+                tokens = word_tokenize(text)
+                bigrams = list(ngrams(tokens, 2))
+                return len(set(bigrams))
+            except:
+                return None
         
         # Apply the function to each row in the DataFrame
-        df[new_column] = df[text_column].apply(count_unique_bigrams)
+        df[new_column] = df[text_column].progress_apply(count_unique_bigrams)
         return df
 
 

@@ -12,11 +12,12 @@ from guidance import models
 # Additional imports from your original environment
 # ---------------------------------------------------------------------
 from extractors import FluencyMetric, GrammarMetric, EditsMetric
-from attack.oracles import (
-    ArmoRMOracle,
-    OffsetBiasOracle,
-    DiffOracle
-)
+# import (
+#     ArmoRMOracle,
+#     OffsetBiasOracle,
+#     DiffOracle
+# )
+from extractors.diversity import UniqueBigramsDiversity
 
 # ---------------------------------------------------------------------
 # Configure logger
@@ -28,8 +29,8 @@ logger = logging.getLogger(__name__)
 # Constants and required columns
 # ---------------------------------------------------------------------
 REQUIRED_COLUMNS = [
-    "armolm_quality", "offsetbias_quality", "difforacle_quality",
-    "words_edited", "perplexity", "grammar_errors",
+    # "armolm_quality", "offsetbias_quality", "difforacle_quality",
+    "words_edited", "perplexity", "grammar_errors", "unique_bigrams"
 ] 
 
 # ---------------------------------------------------------------------
@@ -74,7 +75,7 @@ def assign_crossfile_group_ids(combined_df):
 # ---------------------------------------------------------------------
 def load_partitioned_data(watermark, mutator):
     pattern = f"*_{watermark}_{mutator}_*.csv"  # Matches both with and without "part"
-    source_dir = "./attack/traces"
+    source_dir = "./attack/traces/"
     annotated_dir = "./attack/traces/annotated"
     
     source_files = glob.glob(os.path.join(source_dir, pattern))
@@ -123,7 +124,8 @@ def load_partitioned_data(watermark, mutator):
     
     combined_df = pd.concat(dfs, ignore_index=True)
     # IMPORTANT: Assign cross-file group IDs here (without re-sorting)
-    combined_df = assign_crossfile_group_ids(combined_df)
+    if "group_id" not in combined_df.columns:
+        combined_df = assign_crossfile_group_ids(combined_df)
 
     return combined_df, valid_files
 
@@ -146,6 +148,9 @@ def evaluate_column(df, column, mutator):
     Compute missing values for a specific column using the corresponding metric.
     """
     metric = None
+    N = 10
+    if "Word" in mutator:
+        N = 100
     try:
         if column == "words_edited":
             print(f"Loading EditsMetric()")
@@ -159,27 +164,28 @@ def evaluate_column(df, column, mutator):
             print(f"Loading GrammarMetric()")
             metric = GrammarMetric()
             df = metric.evaluate_dataframe(df, "mutated_text", "grammar_errors")
-        elif column == "armolm_quality":
-            print(f"Loading ArmoRMOracle()")
-            metric = ArmoRMOracle()
-            df = metric.score_dataframe(df, "prompt", "mutated_text", "armolm_quality")
-        elif column == "offsetbias_quality":
-            print(f"Loading OffsetBiasOracle()")
-            metric = OffsetBiasOracle()
-            df = metric.score_dataframe(df, "prompt", "mutated_text", "offsetbias_quality")
-        elif column == "difforacle_quality":
-            print(f"Loading DiffOracle(Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf)")
-            llm = models.LlamaCpp(
-                model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-IMP-DiffOracle-0.1-q8_0.gguf",
-                echo=False,
-                n_gpu_layers=-1,
-                n_ctx=4096*3
-            )
-            metric = DiffOracle(llm=llm)
-            N = 10
-            if "Word" in mutator:
-                N = 100
-            df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N)
+        elif column == "unique_bigrams":
+            print(f"Calculating UniqueBigramsDiversity...")
+            metric = UniqueBigramsDiversity()
+            df = metric.evaluate_dataframe(df, "mutated_text", "unique_bigrams")
+        # elif column == "armolm_quality":
+        #     print(f"Loading ArmoRMOracle()")
+        #     metric = ArmoRMOracle()
+        #     df = metric.score_dataframe(df, "prompt", "mutated_text", "armolm_quality", N)
+        # elif column == "offsetbias_quality":
+        #     print(f"Loading OffsetBiasOracle()")
+        #     metric = OffsetBiasOracle()
+        #     df = metric.score_dataframe(df, "prompt", "mutated_text", "offsetbias_quality", N)
+        # elif column == "difforacle_quality":
+        #     print(f"Loading DiffOracle(Meta-Llama-3.1-70B-Instruct-q8_0.gguf)")
+        #     llm = models.LlamaCpp(
+        #         model="/data2/.shared_models/llama.cpp_models/Meta-Llama-3.1-70B-Instruct-q8_0.gguf",
+        #         echo=False,
+        #         n_gpu_layers=-1,
+        #         n_ctx=4096*3
+        #     )
+        #     metric = DiffOracle(llm=llm)
+        #     df = metric.score_dataframe(df, "prompt", "current_text", "mutated_text", "difforacle_quality", N)
         
         # Clean up
         del metric
@@ -256,16 +262,14 @@ def main():
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
-    # watermark_types.reverse()
-    # mutators.reverse()
+    watermark_types.reverse()
+    mutators.reverse()
 
     for watermark in watermark_types:
         for mutator in mutators:
             # Skip over incomplete traces
-            if ((watermark == "Adaptive"            and mutator == "EntropyWordMutator") or
-                (watermark == "KGW"                 and mutator == "EntropyWordMutator") or
-                (watermark == "Adaptive"            and mutator == "DocumentMutator") or 
-                (watermark == "GPT4o_unwatermarked" and mutator == "DocumentMutator")
+            if ((watermark == "GPT4o_unwatermarked" and mutator == "DocumentMutator") or
+                (watermark == "Adaptive" and mutator == "DocumentMutator")
                 ):
                 print(f"Skipping {watermark} + {mutator}")
                 continue
@@ -278,6 +282,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=2,3 python -m attack.scripts.annotate
+    # CUDA_VISIBLE_DEVICES=3 python -m attack.scripts.annotate
 
     main()

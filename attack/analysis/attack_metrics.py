@@ -49,7 +49,7 @@ def get_mean_change_in_z_scores(df, watermark_threshold=0.0):
     quality_preserved_df = quality_preserved_df.sort_values(by='step_num')
     z_score_changes = []
     for group_id, group_df in quality_preserved_df.groupby('group_id'):
-        first_success_idx = group_df[group_df['watermark_score'] < watermark_threshold].index.min()
+        first_success_idx = group_df[(group_df['watermark_score'] < watermark_threshold)].index.min()
         if pd.notna(first_success_idx):
             group_df = group_df.loc[:first_success_idx]  # Consider only steps before the threshold
         else:
@@ -99,20 +99,23 @@ if __name__ == "__main__":
     "WordMutator",
     "EntropyWordMutator",
 ]
-    watermarks = ["Adaptive", "KGW"]
+    watermarks = ["Adaptive", "KGW", "SIR"]
 
     cutoffs = {
         "Adaptive" : [50, 60, 70, 80, 90, 100],
-        "KGW" :  [0, 0.5, 1, 2, 3, 6]
+        "KGW" :  [0, 0.5, 1, 2, 3, 6],
+        "SIR" : [0, 0.1, 0.2, 0.3, 0.5, 1]
+
     }
     labels = ["Average Time to Success", "Average Attack Success", "Average Steps to Success", "Average score change"]
     titles = ["Time to Success", "Attack Success Rate", "Steps to Sucess", "Score change"]
   
 
-    mutator_markers = ["s", "D", "X", "o", "^", "p"]
+    mutator_markers = ["s", "D", "X", "o", "^", "p", ".", "<", ">"]
     for idx, watermarker in enumerate(watermarks):
         print(f"Plotting {watermarker}")
         fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle(f"{watermarker}")
         # plt.subplots_adjust(left=.1, bottom=None, right=None, top=None, wspace=.3, hspace=None)
         axsl = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
         for idm, mutator in enumerate(mutators):
@@ -125,6 +128,8 @@ if __name__ == "__main__":
             df = load_all_csvs("./attack/traces/annotated", watermarker, mutator)
             if df.empty:
                 continue
+            if "Adaptive" in watermarker:
+                df = df[df['watermark_score'] != 0]
             for cutoff in cutoffs[watermarker]:
                     try:
                         mean_time = get_mean_total_time_for_successful_attacks(df, cutoff)
@@ -145,6 +150,7 @@ if __name__ == "__main__":
                 axsl[i].set_ylabel(labels[i])
                 axsl[i].set_title(titles[i])
                 # Move legend outside the plot
+                axsl[i].set_yscale("symlog")
                 axsl[i].legend(loc="upper left", bbox_to_anchor=(1.05, 1))
         fig.subplots_adjust(right=0.8, wspace=0.8, hspace=0.3)
-        fig.savefig(f"./attack/{watermarker}.png")
+        fig.savefig(f"./attack/analysis/figs/{watermarker}.png")
