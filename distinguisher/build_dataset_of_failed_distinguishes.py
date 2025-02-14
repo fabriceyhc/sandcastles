@@ -8,10 +8,10 @@ import pandas as pd
 input_directory = "./distinguisher/results"
 
 # Define a pattern to match specific CSV files (e.g., only files starting with "llama3")
-file_pattern = os.path.join(input_directory, "llama3.1-70B-full*SimpleDistinguisher.csv")
+file_pattern = os.path.join(input_directory, "llama3.1-70B-long*SimpleDistinguisher.csv")
 
 # Output file
-output_file = "./distinguisher/data/failed_distinguishes_for_llama3.1-70B-full.csv"
+output_file = "./distinguisher/data/failed_distinguishes_for_llama3.1-70B-long.csv"
 
 # List to collect data from all files
 all_disagreements = []
