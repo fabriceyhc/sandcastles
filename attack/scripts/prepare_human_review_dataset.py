@@ -92,9 +92,9 @@ def main():
     from attack.utils import load_all_csvs
 
     watermarks = ["Adaptive", "KGW", "SIR"]
-    mutators = [
-        "SentenceMutator"
-    ]
+    mutators = ["DocumentMutator", "Document1StepMutator", "Document2StepMutator", 
+            "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"]
+
 
     unwatermarked_mean_std = {
         "Adaptive": (49.42577, 3.365801),
@@ -127,7 +127,7 @@ def main():
 
         for mutator in mutators:
 
-            trace_df = load_all_csvs("./attack/traces/long_traces", watermark, mutator, ignore_long=False)
+            trace_df = load_all_csvs("./attack/traces/annotated", watermark, mutator, ignore_long=False)
 
             print(trace_df)
             
@@ -149,18 +149,18 @@ def main():
 
     final_df = pd.concat(dfs, axis=0)
     final_df = final_df.dropna(subset=["initial_InternLMOracle_score", "attacked_InternLMOracle_score"])
-    final_df.to_csv(f"./data/final_review/full_dataset_long_traces_len={len(final_df)}.csv", index=False)
+    final_df.to_csv(f"./data/final_review/full_dataset_len={len(final_df)}.csv", index=False)
 
     # Subsample
     N = 20
     final_df_subsampled = final_df.groupby(['watermark', 'mutator'], group_keys=False).apply(lambda x: x.sample(min(len(x), N)))
-    final_df_subsampled.to_csv(f"./data/final_review/subsampled_dataset_long_traces_len={len(final_df_subsampled)}.csv", index=False)
+    final_df_subsampled.to_csv(f"./data/final_review/subsampled_dataset_len={len(final_df_subsampled)}.csv", index=False)
 
     final_df_obscured = obscure_texts(final_df)
-    final_df_obscured.to_csv(f"./data/final_review/full_dataset_long_traces_len={len(final_df_obscured)}_obscured.csv", index=False)
+    final_df_obscured.to_csv(f"./data/final_review/full_dataset_len={len(final_df_obscured)}_obscured.csv", index=False)
 
     final_df_subsampled_obscured = obscure_texts(final_df_subsampled)
-    final_df_subsampled_obscured.to_csv(f"./data/final_review/subsampled_dataset_long_traces_len={len(final_df_subsampled_obscured)}_obscured.csv", index=False)
+    final_df_subsampled_obscured.to_csv(f"./data/final_review/subsampled_dataset_len={len(final_df_subsampled_obscured)}_obscured.csv", index=False)
 
 if __name__ == "__main__":
 

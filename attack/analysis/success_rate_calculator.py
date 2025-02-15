@@ -1,4 +1,5 @@
 import os
+import ast
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -135,8 +136,22 @@ class WatermarkMetricsEvaluator:
             'P': safe_div(TP, TP + FP),
             'R': safe_div(TP, TP + FN),
             'F1': safe_div(2*TP, 2*TP + FP + FN),
-            'ACC': safe_div(TP + TN, len(self.true_labels))
+            'ACC': safe_div(TP + TN, len(self.true_labels)),
+            'ASR': 1-safe_div(2*TP, 2*TP + FP + FN)
         }
+
+def safe_extract_internlm_quality(value, key):
+    """
+    Safely extract a score from a quality_analysis string.
+    If value is NaN or parsing fails, returns None.
+    """
+    try:
+        if pd.notnull(value):
+            analysis = ast.literal_eval(value)
+            return analysis.get(key, None)
+    except Exception:
+        return None
+    return None
 
 def process_attack_traces(df):
     # Drop rows with NaN in 'watermark_score' to avoid issues with idxmin()
@@ -149,6 +164,8 @@ def process_attack_traces(df):
     if 'original_steps' not in df.columns:
         total_steps = df_sorted.groupby('group_id')['step_num'].max()
         df_sorted['original_steps'] = df_sorted['group_id'].map(total_steps)
+
+    print(df.columns)
     
     result = df_sorted.groupby('group_id').agg(
         init_watermark_score=pd.NamedAgg(column='watermark_score', aggfunc='first'),
@@ -158,28 +175,75 @@ def process_attack_traces(df):
         min_score_step=pd.NamedAgg(
             column='watermark_score',
             aggfunc=lambda x: df_sorted.loc[x.idxmin(), 'step_num'] if not x.isna().all() else np.nan
-        )
+        ),
+        # # Extract the initial internLM quality score from quality_analysis
+        # init_internLM_quality=pd.NamedAgg(
+        #     column='quality_analysis', 
+        #     aggfunc=lambda s: safe_extract_internlm_quality(s.iloc[0], "original_score_A")
+        # ),
+        # Extract the final internLM quality score from quality_analysis
+        final_internLM_quality=pd.NamedAgg(
+            column='quality_analysis', 
+            aggfunc=lambda s: safe_extract_internlm_quality(s.iloc[-1], "original_score_B")
+        ),
+        # init_perplexity=pd.NamedAgg(column='perplexity', aggfunc='first'),
+        final_perplexity=pd.NamedAgg(column='perplexity', aggfunc='last'),
+        # init_grammar_errors=pd.NamedAgg(column='grammar_errors', aggfunc='first'),
+        final_grammar_errors=pd.NamedAgg(column='grammar_errors', aggfunc='last'),
+        # init_unique_bigrams=pd.NamedAgg(column='unique_bigrams', aggfunc='first'),
+        final_unique_bigrams=pd.NamedAgg(column='unique_bigrams', aggfunc='last')
     ).reset_index()
 
     return result
 
 def format_success_rates(df):
-    # Pivot the dataframe to create separate columns for "fin" and "min" metrics
+    # Define the metrics that vary by score_type
+    metrics_to_pivot = ['ASR']
+    
+    # Pivot these metrics, so that each score_type (min/fin) becomes a separate column
     df_pivot = df.pivot_table(
         index=["watermark_type", "mutator", "threshold", "score_mean", "score_std"],
         columns="score_type",
-        values=["F1"],
+        values=metrics_to_pivot,
     )
-
-    # Flatten the MultiIndex in columns
+    
+    # Flatten the MultiIndex in columns (e.g., ASR_fin, ASR_min, etc.)
     df_pivot.columns = [f"{metric}_{stype}" for metric, stype in df_pivot.columns]
     df_pivot.reset_index(inplace=True)
-
-    return df_pivot
+    
+    # The new average internLM and watermark scores do not depend on score_type.
+    # Get them by grouping and taking the first value for each group.
+    # avg_cols = [
+    #     'avg_init_internLM_quality', 'avg_final_internLM_quality',
+    #     'avg_init_watermark_score', 'avg_final_watermark_score',
+    #     'avg_init_perplexity', 'avg_final_perplexity',
+    #     'avg_init_grammar_errors', 'avg_final_grammar_errors',
+    #     'avg_init_unique_bigrams', 'avg_final_unique_bigrams'
+    # ]
+    avg_cols = [
+        'avg_final_internLM_quality',
+        'avg_final_watermark_score',
+        'avg_final_perplexity',
+        'avg_final_grammar_errors',
+        'avg_final_unique_bigrams'
+    ]
+    avg_df = df.groupby(
+        ["watermark_type", "mutator", "threshold", "score_mean", "score_std"]
+    )[avg_cols].first().reset_index()
+    
+    # Merge the pivoted metrics with the average metrics
+    df_final = pd.merge(
+        df_pivot,
+        avg_df,
+        on=["watermark_type", "mutator", "threshold", "score_mean", "score_std"],
+        how="left"
+    )
+    
+    return df_final
 
 def plot_f1_scores(df, std_index=2, save_path="./attack/analysis/figs/f1_scores.png"):
     """
-    Plots F1_fin and F1_min scores for different watermarking schemes and mutators using seaborn,
+    Plots ASR_fin and ASR_min scores for different watermarking schemes and mutators using seaborn,
     distinguishing them with different marker shapes.
 
     Parameters:
@@ -207,25 +271,25 @@ def plot_f1_scores(df, std_index=2, save_path="./attack/analysis/figs/f1_scores.
     x_positions = np.arange(len(mutators))  # Base x-axis positions for mutators
 
     # Define markers for differentiation
-    marker_styles = {"F1_fin": "o", "F1_min": "s"}  # Circle for F1_fin, Square for F1_min
+    marker_styles = {"ASR_fin": "o", "ASR_min": "s"}  # Circle for ASR_fin, Square for ASR_min
 
-    # Plot F1_fin and F1_min for each watermark type and mutator
+    # Plot ASR_fin and ASR_min for each watermark type and mutator
     for i, watermark_type in enumerate(watermark_types):
         subset = std_data[std_data['watermark_type'] == watermark_type]
 
         # Calculate offset x-positions for this watermark type
         x_offset = x_positions + (i - len(watermark_types) / 2) * offset
 
-        # Plot F1_fin and F1_min as connected lines with different markers
+        # Plot ASR_fin and ASR_min as connected lines with different markers
         for j, mutator in enumerate(mutators):
             row = subset[subset['mutator'] == mutator]
             if not row.empty:
-                f1_fin = row['F1_fin'].values[0]
-                f1_min = row['F1_min'].values[0]
+                ASR_fin = row['ASR_fin'].values[0]
+                ASR_min = row['ASR_min'].values[0]
 
-                ax.plot([x_offset[j], x_offset[j]], [f1_fin, f1_min], color="black", linestyle="--", alpha=0.5)
-                ax.scatter(x_offset[j], f1_fin, marker=marker_styles["F1_fin"], s=100, label=f"{watermark_type} (F1_fin)")
-                ax.scatter(x_offset[j], f1_min, marker=marker_styles["F1_min"], s=100, label=f"{watermark_type} (F1_min)")
+                ax.plot([x_offset[j], x_offset[j]], [ASR_fin, ASR_min], color="black", linestyle="--", alpha=0.5)
+                ax.scatter(x_offset[j], ASR_fin, marker=marker_styles["ASR_fin"], s=100, label=f"{watermark_type} (ASR_fin)")
+                ax.scatter(x_offset[j], ASR_min, marker=marker_styles["ASR_min"], s=100, label=f"{watermark_type} (ASR_min)")
 
     # Set x-axis ticks and labels
     ax.set_xticks(x_positions)
@@ -234,7 +298,7 @@ def plot_f1_scores(df, std_index=2, save_path="./attack/analysis/figs/f1_scores.
     # Add labels and title
     ax.set_xlabel('Mutator', fontsize=14)
     ax.set_ylabel('F1 Score', fontsize=14)
-    ax.set_title(f'F1_fin and F1_min Scores for Different Watermarking Schemes and Mutators (Threshold = {std_index}σ)', 
+    ax.set_title(f'ASR_fin and ASR_min Scores for Different Watermarking Schemes and Mutators (Threshold = {std_index}σ)', 
                  fontsize=16, pad=20)
 
     # Simplify legend
@@ -254,11 +318,11 @@ def plot_f1_scores(df, std_index=2, save_path="./attack/analysis/figs/f1_scores.
 
 def plot_f1_heatmaps(df, threshold_std=2, watermarker_order=None, mutator_order=None, save_path=None):
     """
-    Generates heatmaps for F1_fin and F1_min at a given threshold (in standard deviations)
+    Generates heatmaps for ASR_fin and ASR_min at a given threshold (in standard deviations)
     and optionally saves them to a specified location.
 
     Parameters:
-    - df: pandas DataFrame containing columns ["watermark_type", "mutator", "threshold", "score_mean", "score_std", "F1_fin", "F1_min"]
+    - df: pandas DataFrame containing columns ["watermark_type", "mutator", "threshold", "score_mean", "score_std", "ASR_fin", "ASR_min"]
     - threshold_std: The number of standard deviations away from the mean to filter the threshold.
     - watermarker_order: List of watermarker names in desired order.
     - mutator_order: List of mutator names in desired order.
@@ -283,39 +347,39 @@ def plot_f1_heatmaps(df, threshold_std=2, watermarker_order=None, mutator_order=
     df_filtered = df[(df["threshold"] - (df["score_mean"] + threshold_std * df["score_std"])).abs() < tolerance]
 
     # Ensure only one row per (mutator, watermark_type) by averaging F1 scores if duplicates exist
-    df_filtered = df_filtered.groupby(["mutator", "watermark_type"], as_index=False).agg({"F1_fin": "mean", "F1_min": "mean"})
+    df_filtered = df_filtered.groupby(["mutator", "watermark_type"], as_index=False).agg({"ASR_fin": "mean", "ASR_min": "mean"})
 
     # Ensure correct categorical ordering
     df_filtered["watermark_type"] = pd.Categorical(df_filtered["watermark_type"], categories=watermarker_order, ordered=True)
     df_filtered["mutator"] = pd.Categorical(df_filtered["mutator"], categories=mutator_order, ordered=True)
 
     # Pivot the data for heatmap plotting
-    df_f1_fin = df_filtered.pivot(index="mutator", columns="watermark_type", values="F1_fin")
-    df_f1_min = df_filtered.pivot(index="mutator", columns="watermark_type", values="F1_min")
+    df_ASR_fin = df_filtered.pivot(index="mutator", columns="watermark_type", values="ASR_fin")
+    df_ASR_min = df_filtered.pivot(index="mutator", columns="watermark_type", values="ASR_min")
 
     # Ensure save path exists if specified
     if save_path:
         os.makedirs(save_path, exist_ok=True)
 
-    # Plot F1_fin heatmap
+    # Plot ASR_fin heatmap
     plt.figure(figsize=(8, 6))
-    sns.heatmap(df_f1_fin, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
-    plt.title(f"F1_fin Heatmap (Threshold = {threshold_std}σ)")
+    sns.heatmap(df_ASR_fin, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
+    plt.title(f"ASR_fin Heatmap (Threshold = {threshold_std}σ)")
     plt.xlabel("Watermarker")
     plt.ylabel("Mutator")
     if save_path:
-        fin_path = os.path.join(save_path, f"F1_fin_heatmap_{threshold_std}sigma.png")
+        fin_path = os.path.join(save_path, f"ASR_fin_heatmap_{threshold_std}sigma.png")
         plt.savefig(fin_path, dpi=300, bbox_inches="tight")
     plt.show()
 
-    # Plot F1_min heatmap
+    # Plot ASR_min heatmap
     plt.figure(figsize=(8, 6))
-    sns.heatmap(df_f1_min, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
-    plt.title(f"F1_min Heatmap (Threshold = {threshold_std}σ)")
+    sns.heatmap(df_ASR_min, annot=True, cmap="RdBu", fmt=".2f", vmin=0, vmax=1)
+    plt.title(f"ASR_min Heatmap (Threshold = {threshold_std}σ)")
     plt.xlabel("Watermarker")
     plt.ylabel("Mutator")
     if save_path:
-        min_path = os.path.join(save_path, f"F1_min_heatmap_{threshold_std}sigma.png")
+        min_path = os.path.join(save_path, f"ASR_min_heatmap_{threshold_std}sigma.png")
         plt.savefig(min_path, dpi=300, bbox_inches="tight")
     plt.show()
 
@@ -324,10 +388,10 @@ def plot_f1_heatmaps(df, threshold_std=2, watermarker_order=None, mutator_order=
 
 def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
     """
-    Plots separate line plots for each watermarking scheme, showing F1_fin and F1_min scores 
+    Plots separate line plots for each watermarking scheme, showing ASR_fin and ASR_min scores 
     against the number of standard deviations (0,1,2,3), with unique line styles and markers per mutator.
     
-    F1_fin is always solid, and F1_min is always dotted. Lines are smoothed using cubic interpolation.
+    ASR_fin is always solid, and ASR_min is always dotted. Lines are smoothed using cubic interpolation.
     All plots have the same Y-axis range from 0 to 1 for consistency. Markers are added to the legend.
 
     Parameters:
@@ -387,23 +451,23 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
             # Interpolation for smoothing
             if len(subset) > 3:  # Ensure enough points for cubic interpolation
                 x_new = np.linspace(subset["std_level"].min(), subset["std_level"].max(), 100)
-                f1_fin_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["F1_fin"], kind="cubic")
-                f1_min_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["F1_min"], kind="cubic")
+                ASR_fin_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["ASR_fin"], kind="cubic")
+                ASR_min_smooth = scipy.interpolate.interp1d(subset["std_level"], subset["ASR_min"], kind="cubic")
                 
-                # Plot smoothed F1_fin (solid)
-                ax.plot(x_new, f1_fin_smooth(x_new), color=color, linestyle="-", linewidth=2)
+                # Plot smoothed ASR_fin (solid)
+                ax.plot(x_new, ASR_fin_smooth(x_new), color=color, linestyle="-", linewidth=2)
 
-                # Plot smoothed F1_min (dotted)
-                ax.plot(x_new, f1_min_smooth(x_new), color=color, linestyle=":", linewidth=2)
+                # Plot smoothed ASR_min (dotted)
+                ax.plot(x_new, ASR_min_smooth(x_new), color=color, linestyle=":", linewidth=2)
 
             else:
                 # Plot regular lines if not enough points for smoothing
-                ax.plot(subset["std_level"], subset["F1_fin"], color=color, linestyle="-", linewidth=2)
-                ax.plot(subset["std_level"], subset["F1_min"], color=color, linestyle=":", linewidth=2)
+                ax.plot(subset["std_level"], subset["ASR_fin"], color=color, linestyle="-", linewidth=2)
+                ax.plot(subset["std_level"], subset["ASR_min"], color=color, linestyle=":", linewidth=2)
 
             # Add markers to original points for visibility
-            ax.scatter(subset["std_level"], subset["F1_fin"], color=color, marker=marker, s=80)
-            ax.scatter(subset["std_level"], subset["F1_min"], color=color, marker=marker, s=80, alpha=0.8)
+            ax.scatter(subset["std_level"], subset["ASR_fin"], color=color, marker=marker, s=80)
+            ax.scatter(subset["std_level"], subset["ASR_min"], color=color, marker=marker, s=80, alpha=0.8)
 
             # Add entry to legend with both marker and line
             legend_handles.append(mlines.Line2D([], [], color=color, marker=marker, linestyle="-", markersize=8, label=mutator))
@@ -453,6 +517,8 @@ if __name__ == "__main__":
         "SIR": (0.077541, 0.068233825),
     }
 
+    num_std = 2
+
     results = []
     for watermark_type in watermark_types:
         score_mean, score_std = unwatermarked_mean_std[watermark_type]
@@ -464,6 +530,9 @@ if __name__ == "__main__":
                 print(f"[MAIN] No traces found for {watermark_type} + {mutator}")
                 continue
 
+            # Filter only for rows where quality is approved
+            df = df[df['quality_preserved'] == True]
+
             # Store original steps before filtering
             total_steps = df.groupby('group_id')['step_num'].max()
             df['original_steps'] = df['group_id'].map(total_steps)
@@ -473,10 +542,38 @@ if __name__ == "__main__":
             
             attack_metrics = process_attack_traces(df)
             
-            print(attack_metrics[['group_id', 'init_watermark_score', 'min_watermark_score', 
-                                'final_watermark_score', 'total_attack_steps',
-                                'min_score_step']].head().to_string(index=False))
+            # Compute overall averages across groups for both internLM quality and watermark scores
+            # avg_init_internLM_quality = attack_metrics['init_internLM_quality'].mean()
+            avg_final_internLM_quality = attack_metrics['final_internLM_quality'].mean()
+            # avg_init_watermark_score = attack_metrics['init_watermark_score'].mean()
+            avg_final_watermark_score = attack_metrics['final_watermark_score'].mean()
+            # avg_init_perplexity = attack_metrics['init_perplexity'].mean()
+            avg_final_perplexity = attack_metrics['final_perplexity'].mean()
+            # avg_init_grammar_errors = attack_metrics['init_grammar_errors'].mean()
+            avg_final_grammar_errors = attack_metrics['final_grammar_errors'].mean()
+            # avg_init_unique_bigrams = attack_metrics['init_unique_bigrams'].mean()
+            avg_final_unique_bigrams = attack_metrics['final_unique_bigrams'].mean()
 
+            print("Attack trace sample:")
+            print(attack_metrics[['group_id', 'init_watermark_score', 'min_watermark_score', 
+                                  'final_watermark_score', 'total_attack_steps', 'min_score_step',
+                                  'final_internLM_quality',
+                                  'final_perplexity',
+                                  'final_grammar_errors',
+                                  'final_unique_bigrams'
+                                 ]].head().to_string(index=False))
+            print("\nAverages for this combination:")
+            # print(f"  Avg initial watermark score:  {avg_init_watermark_score:.4f}")
+            print(f"  Avg final watermark score:    {avg_final_watermark_score:.4f}")
+            # print(f"  Avg initial internLM quality: {avg_init_internLM_quality:.4f}")
+            print(f"  Avg final internLM quality:   {avg_final_internLM_quality:.4f}")
+            # print(f"  Avg initial perplexity:       {avg_init_perplexity:.4f}")
+            print(f"  Avg final perplexity:         {avg_final_perplexity:.4f}")
+            # print(f"  Avg initial grammar errors:   {avg_init_grammar_errors:.4f}")
+            print(f"  Avg final grammar errors:     {avg_final_grammar_errors:.4f}")
+            # print(f"  Avg initial unique bigrams:   {avg_init_unique_bigrams:.4f}")
+            print(f"  Avg final unique bigrams:     {avg_final_unique_bigrams:.4f}\n")
+            
             min_scores = attack_metrics['min_watermark_score'].tolist()
             fin_scores = attack_metrics['final_watermark_score'].tolist()
             true_labels = [1 for _ in range(len(min_scores))]
@@ -485,7 +582,7 @@ if __name__ == "__main__":
 
                 evaluator = WatermarkMetricsEvaluator(true_labels, scores)
 
-                for i in range(4): # to explore 3 standard deviations from mean unwatermarked
+                for i in range(4):  # to explore 3 standard deviations from mean unwatermarked
 
                     threshold = score_mean + (i * score_std)
                     metrics = evaluator.compute_metrics(threshold)
@@ -496,11 +593,25 @@ if __name__ == "__main__":
                         "score_type": name,
                         "score_mean": score_mean,
                         "score_std": score_std,
+                        "num_std": i,
                         "threshold": threshold,
-                        **metrics
+                        **metrics,
+                        # "avg_init_internLM_quality": avg_init_internLM_quality,
+                        "avg_final_internLM_quality": avg_final_internLM_quality,
+                        # "avg_init_watermark_score": avg_init_watermark_score,
+                        "avg_final_watermark_score": avg_final_watermark_score,
+                        # "avg_init_perplexity": avg_init_perplexity,
+                        "avg_final_perplexity": avg_final_perplexity,
+                        # "avg_init_grammar_errors": avg_init_grammar_errors,
+                        "avg_final_grammar_errors": avg_final_grammar_errors,
+                        # "avg_init_unique_bigrams": avg_init_unique_bigrams,
+                        "avg_final_unique_bigrams": avg_final_unique_bigrams
                     })
 
+
     df = pd.DataFrame(results)
+    if num_std:
+        df = df[df['num_std']==num_std]
     df.to_csv("./attack/analysis/csv/success_rates.csv", index=False)
 
     df_formatted = format_success_rates(df)
