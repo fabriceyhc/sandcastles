@@ -33,8 +33,8 @@ def main():
     llm, distinguisher_persona  = get_model("gpt-4o")
     distinguisher = LogicGPT(llm, distinguisher_persona)
     # Load the dataset
-    df = pd.read_csv("distinguisher/data/failed_distinguishes_for_llama3.1-70B-long.csv")
-    evaluate2(distinguisher, df, "distinguisher/results/redemption_long_with_4o_logic.csv")
+    df = pd.read_csv("distinguisher/data/failed_distinguishes_for_llama3.1-70B-full.csv")
+    evaluate2(distinguisher, df, "distinguisher/results/redemption_full_with_4o_logic.csv")
 
 if __name__ == "__main__":
     main()

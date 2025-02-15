@@ -228,6 +228,9 @@ def get_model(model_name):
     elif("gpt" in model_name):
         load_dotenv(find_dotenv())
         llm = models.OpenAI(model_name)
+    elif("o1" in model_name or "o3" in model_name):
+        load_dotenv(find_dotenv())
+        llm = models.OpenAI(model_name)
 
     return llm, distinguisher_persona
 

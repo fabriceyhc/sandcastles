@@ -93,8 +93,7 @@ def main():
 
     watermarks = ["Adaptive", "KGW", "SIR"]
     mutators = [
-        "Document1StepMutator", "Document2StepMutator", "DocumentMutator", 
-        "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
+        "SentenceMutator"
     ]
 
     unwatermarked_mean_std = {
@@ -103,64 +102,65 @@ def main():
         "SIR": (0.077541, 0.068233825),
     }
    
-    print(f"[MAIN] Try loading existing datasets...")
-    try:
+    # print(f"[MAIN] Try loading existing datasets...")
+    # try:
 
-        final_df = pd.read_csv("./data/final_review/full_dataset_len=425.csv")
-        final_df_subsampled = pd.read_csv("./data/final_review/subsampled_dataset_len=208.csv")
+    #     final_df = pd.read_csv("./data/final_review/full_dataset_len=425.csv")
+    #     final_df_subsampled = pd.read_csv("./data/final_review/subsampled_dataset_len=208.csv")
 
-        print(f"[MAIN] Success. Skipping recomputation...")
+    #     print(f"[MAIN] Success. Skipping recomputation...")
 
-    except:
+    # except:
 
-        print(f"[MAIN] Failed to load existing datasets...")
+    #     print(f"[MAIN] Failed to load existing datasets...")
 
-        dfs = []
+    dfs = []
 
-        for watermark in watermarks:
+    for watermark in watermarks:
 
-            if watermark not in unwatermarked_mean_std:
-                print(f"[MAIN] Skipping {watermark} - no threshold data available.")
+        if watermark not in unwatermarked_mean_std:
+            print(f"[MAIN] Skipping {watermark} - no threshold data available.")
+            continue
+
+        score_mean, score_std = unwatermarked_mean_std[watermark]
+        threshold = score_mean + 2 * score_std
+
+        for mutator in mutators:
+
+            trace_df = load_all_csvs("./attack/traces/long_traces", watermark, mutator, ignore_long=False)
+
+            print(trace_df)
+            
+            if trace_df.empty:
+                print(f"[MAIN] No traces found for {watermark} + {mutator}")
                 continue
 
-            score_mean, score_std = unwatermarked_mean_std[watermark]
-            threshold = score_mean + 2 * score_std
+            # Apply Adaptive watermark score filtering
+            if watermark == "Adaptive":
+                trace_df = trace_df[~trace_df['watermark_score'].between(-0.0001, 0.0001)]
 
-            for mutator in mutators:
+            print(f"[MAIN] Processing traces for {watermark} + {mutator}")
 
-                trace_df = load_all_csvs("./attack/traces/annotated", watermark, mutator)
-                
-                if trace_df.empty:
-                    print(f"[MAIN] No traces found for {watermark} + {mutator}")
-                    continue
+            first_vs_final_df = process_dataframe(trace_df, threshold)
+            first_vs_final_df["watermark"] = [watermark] * len(first_vs_final_df)
+            first_vs_final_df["mutator"] = [mutator] * len(first_vs_final_df)
+            
+            dfs.append(first_vs_final_df)
 
-                # Apply Adaptive watermark score filtering
-                if watermark == "Adaptive":
-                    trace_df = trace_df[~trace_df['watermark_score'].between(-0.0001, 0.0001)]
+    final_df = pd.concat(dfs, axis=0)
+    final_df = final_df.dropna(subset=["initial_InternLMOracle_score", "attacked_InternLMOracle_score"])
+    final_df.to_csv(f"./data/final_review/full_dataset_long_traces_len={len(final_df)}.csv", index=False)
 
-                print(f"[MAIN] Processing traces for {watermark} + {mutator}")
-
-                first_vs_final_df = process_dataframe(trace_df, threshold)
-                first_vs_final_df["watermark"] = [watermark] * len(first_vs_final_df)
-                first_vs_final_df["mutator"] = [mutator] * len(first_vs_final_df)
-                
-                dfs.append(first_vs_final_df)
-
-        final_df = pd.concat(dfs, axis=0)
-        final_df = final_df.dropna(subset=["initial_InternLMOracle_score", "attacked_InternLMOracle_score"])
-
-        final_df.to_csv(f"./data/final_review/full_dataset_len={len(final_df)}.csv", index=False)
-
-        # Subsample
-        N = 20
-        final_df_subsampled = final_df.groupby(['watermark', 'mutator'], group_keys=False).apply(lambda x: x.sample(min(len(x), N)))
-        final_df_subsampled.to_csv(f"./data/final_review/subsampled_dataset_len={len(final_df_subsampled)}.csv", index=False)
+    # Subsample
+    N = 20
+    final_df_subsampled = final_df.groupby(['watermark', 'mutator'], group_keys=False).apply(lambda x: x.sample(min(len(x), N)))
+    final_df_subsampled.to_csv(f"./data/final_review/subsampled_dataset_long_traces_len={len(final_df_subsampled)}.csv", index=False)
 
     final_df_obscured = obscure_texts(final_df)
-    final_df_obscured.to_csv(f"./data/final_review/full_dataset_len={len(final_df_obscured)}_obscured.csv", index=False)
+    final_df_obscured.to_csv(f"./data/final_review/full_dataset_long_traces_len={len(final_df_obscured)}_obscured.csv", index=False)
 
     final_df_subsampled_obscured = obscure_texts(final_df_subsampled)
-    final_df_subsampled_obscured.to_csv(f"./data/final_review/subsampled_dataset_len={len(final_df_subsampled_obscured)}_obscured.csv", index=False)
+    final_df_subsampled_obscured.to_csv(f"./data/final_review/subsampled_dataset_long_traces_len={len(final_df_subsampled_obscured)}_obscured.csv", index=False)
 
 if __name__ == "__main__":
 
