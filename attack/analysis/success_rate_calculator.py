@@ -474,8 +474,8 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
 
         # Axis labels and title
         ax.set_xlabel("Standard Deviations from Unwatermarked Mean", fontsize=14)
-        ax.set_ylabel("F1 Score", fontsize=14)
-        ax.set_title(f"F1 Scores for {watermark_type} Watermark", fontsize=16, pad=20)
+        ax.set_ylabel("ASR", fontsize=14)
+        ax.set_title(f"Attack Success Rate (ASR) for {watermark_type} Watermark", fontsize=16, pad=20)
 
         # Set Y-axis limits to ensure all plots are on the same scale
         ax.set_ylim(-0.02, 1.02)
@@ -491,7 +491,7 @@ def plot_f1_lineplot(df, save_path_base="./attack/analysis/figs"):
         plt.tight_layout()
 
         # Save the plot
-        save_path_for_watermark = f"{save_path_base}/f1_lineplot_{watermark_type}.png"
+        save_path_for_watermark = f"{save_path_base}/asr_lineplot_{watermark_type}.png"
         plt.savefig(save_path_for_watermark, dpi=300, bbox_inches="tight")
 
         # Show plot
@@ -517,7 +517,7 @@ if __name__ == "__main__":
         "SIR": (0.077541, 0.068233825),
     }
 
-    num_std = 2
+    num_std = None # 2
 
     results = []
     for watermark_type in watermark_types:

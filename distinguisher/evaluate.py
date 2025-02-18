@@ -182,7 +182,7 @@ def main():
     #     "SIR": ['Document1StepMutator', 'Document2StepMutator'],
     # }
     experiments = {
-        "Adaptive": ["DocumentMutator"],
+        "GPT4o_unwatermarked": ["DocumentMutator"],
     }
 
     # Construct parts
@@ -213,6 +213,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=5,7 python -m distinguisher.evaluate
+    # CUDA_VISIBLE_DEVICES=5 python -m distinguisher.evaluate
 
     main()

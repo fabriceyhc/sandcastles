@@ -50,7 +50,7 @@ def analyze_quality_preservation(csv_path):
     return summary
 
 def main():
-    file_path = "./data/final_review/RQ3_Final_Human_Review_on_Broken_N_=20_per_Mutator+Watermarker.csv"
+    file_path = "./data/final_review/RQ3_Final_Human_Review_on_Broken_N_=20_per_Mutator+Watermarker - subsampled_dataset_len=288_obscured.csv"
     df = analyze_quality_preservation(file_path)
     print(df)
     grade_path = file_path.replace(".csv", "_graded.csv")

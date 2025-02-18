@@ -263,18 +263,11 @@ def main():
         "SentenceMutator", "SpanMutator", "WordMutator", "EntropyWordMutator"
     ]
 
-    # watermark_types.reverse()
+    watermark_types.reverse()
     # mutators.reverse()
 
     for watermark in watermark_types:
         for mutator in mutators:
-            # Skip over incomplete traces
-            if ((watermark == "GPT4o_unwatermarked" and mutator == "DocumentMutator") or
-                # (watermark == "KGW" and mutator == "EntropyWordMutator") or
-                (watermark == "Adaptive" and mutator == "DocumentMutator")
-                ):
-                print(f"Skipping {watermark} + {mutator}")
-                continue
 
             print(f"Processing {watermark} - {mutator}")
             try:
@@ -284,6 +277,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # CUDA_VISIBLE_DEVICES=0 python -m attack.scripts.annotate
+    # CUDA_VISIBLE_DEVICES=1 python -m attack.scripts.annotate
 
     main()
